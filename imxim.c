@@ -21,14 +21,20 @@
 
 struct _xim_data_t
 {
-   Display *dsp;
+   Ecore_X_Display *dsp;
+   Ecore_X_Window win;
+   long mask;
    XIM      im;
    XIC      ic; /* Input context for composed characters */
 };
 
 /* prototype */
-struct _xim_data_t *    xim_data_new(Display *dsp);
+struct _xim_data_t *    xim_data_new(Ecore_X_Display *dsp);
 void                    xim_data_destroy(struct _xim_data_t *xim_data);
+Ecore_X_Window          xim_data_window_get(struct _xim_data_t *xim_data);
+void xim_data_window_set(struct _xim_data_t *xim_data, Ecore_X_Window win);
+void xim_data_event_mask_set(struct _xim_data_t *xim_data, long mask);
+long xim_data_event_mask_get(struct _xim_data_t *xim_data);
 XIC                     xim_data_ic_get(struct _xim_data_t *xim_data);
 XIM                     xim_data_im_get(struct _xim_data_t *xim_data);
 void                    xim_data_ic_set(struct _xim_data_t *xim_data, XIC ic);
@@ -38,14 +44,12 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                                      void              *window) {
    EINA_LOG_DBG("%s in\n", __FUNCTION__);
    struct _xim_data_t *xim_data;
-   Ecore_Window win;
-   Ecore_X_Window client_window;
+   Ecore_X_Window win;
    XIC ic;
    XIM im;
 
    xim_data = ecore_imf_context_data_get(ctx);
-   win = (Ecore_Window)window;
-   client_window = (Ecore_X_Window)win;
+   win = (Ecore_X_Window)((Ecore_Window)window);
 
    im = xim_data_im_get(xim_data);
    if(im) {
@@ -53,10 +57,25 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                      XNInputStyle,
                      XIMPreeditNothing | XIMStatusNothing,
                      XNClientWindow,
-                     client_window,
+                     win,
                      NULL);
-      if (ic)
-          xim_data_ic_set(xim_data, ic);
+      if (ic) {
+         long mask;
+
+         /* XXX */
+         XGetICValues(ic, XNFilterEvents, &mask, NULL);
+#if 1
+         ecore_x_event_mask_set(win, mask);
+#else
+         Ecore_X_Display *dsp = ecore_x_display_get();
+         XSelectInput(dsp,
+                      win, 
+                      mask);
+#endif
+         xim_data_ic_set(xim_data, ic);
+         xim_data_window_set(xim_data, win);
+         xim_data_event_mask_set(xim_data, mask);
+      }
    }
 } /* _ecore_imf_context_xim_client_window_set */
 
@@ -86,12 +105,35 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                                      Ecore_IMF_Event_Type type,
                                                      Ecore_IMF_Event     *event) {
    struct _xim_data_t *xim_data;
-   xim_data = ecore_imf_context_data_get(ctx);
+   XIC ic;
+   Ecore_X_Display *dsp;
+   Ecore_X_Window win;
+   long mask;
+   XEvent xev;
 
-#if 0
-   if (XFilterEvent(&ev, ev.xkey.window))
-       continue;
-#endif
+   xim_data = ecore_imf_context_data_get(ctx);
+   ic = xim_data_ic_get(xim_data); 
+   if(ic) {
+      dsp = ecore_x_display_get();
+      win = xim_data_window_get(xim_data);
+      mask = xim_data_event_mask_get(xim_data);
+
+      XWindowEvent(dsp, win, mask, &xev);
+      if(xev.type == KeyPress) {
+         int val;
+         char buf[256];
+         KeySym keysym;
+         Status status;
+
+         if(XFilterEvent(&xev, win) == True)
+             return EINA_TRUE;
+
+         /* XXX check utf8 or mb */
+         val = XmbLookupString(ic, (XKeyEvent*)&xev,
+                               buf, sizeof(buf), &keysym, &status);
+      }
+   }
+
    return EINA_TRUE;
 } /* _ecore_imf_context_xim_filter_event */
 
@@ -184,7 +226,7 @@ EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
 /*
  * iternal function
  */
-struct _xim_data_t *xim_data_new(Display *dsp)
+struct _xim_data_t *xim_data_new(Ecore_X_Display *dsp)
 {
    struct _xim_data_t *xim_data = NULL;
    XIMStyle chosen_style;
@@ -201,8 +243,6 @@ struct _xim_data_t *xim_data_new(Display *dsp)
    xim_data = calloc(1, sizeof(struct _xim_data_t));
    if(!xim_data)
       return NULL;
-
-   xim_data->dsp = dsp;
 
    XSetLocaleModifiers("");
    xim_data->im = XOpenIM(xim_data->dsp, NULL, NULL, NULL);
@@ -242,12 +282,25 @@ void xim_data_destroy(struct _xim_data_t *xim_data) {
    free(xim_data);
 } /* xim_data_destroy */
 
-XIC xim_data_ic_get(struct _xim_data_t *xim_data) {
-   if(!xim_data)
-      return NULL;
+Ecore_X_Window xim_data_window_get(struct _xim_data_t *xim_data) {
+   if(!xim_data) return -1;     /* XXX */
+   return xim_data->win;
+}
 
-   return xim_data->ic;
-} /* xim_data_ic_get */
+void xim_data_window_set(struct _xim_data_t *xim_data, Ecore_X_Window win) {
+   if(!xim_data) return;
+   xim_data->win = win;
+}
+
+void xim_data_event_mask_set(struct _xim_data_t *xim_data, long mask) {
+   if(!xim_data) return;
+   xim_data->mask = mask;
+}
+
+long xim_data_event_mask_get(struct _xim_data_t *xim_data) {
+   if(!xim_data) return 0;
+   return xim_data->mask;
+}
 
 XIM xim_data_im_get(struct _xim_data_t *xim_data) {
    if(!xim_data)
