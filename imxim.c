@@ -269,7 +269,7 @@ struct _xim_data_t *xim_data_new()
       return NULL;
 
    XSetLocaleModifiers("");
-   xim_data->im = XOpenIM(xim_data->dsp, NULL, NULL, NULL);
+   xim_data->im = XOpenIM(dsp, NULL, NULL, NULL);
    if(!xim_data->im)
       goto error;
 
