@@ -330,6 +330,13 @@ long xim_data_event_mask_get(struct _xim_data_t *xim_data) {
    return xim_data->mask;
 }
 
+XIC xim_data_ic_get(struct _xim_data_t *xim_data) {
+   if(!xim_data)
+       return NULL;             /* XXX */
+   return xim_data->ic;
+} /* xim_data_ic_set */
+
+
 XIM xim_data_im_get(struct _xim_data_t *xim_data) {
    if(!xim_data)
       return NULL;
