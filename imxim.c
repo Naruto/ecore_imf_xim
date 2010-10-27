@@ -124,13 +124,41 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
          char buf[256];
          KeySym keysym;
          Status status;
+         char *compose = NULL;
+         char *tmp = NULL;
 
          if(XFilterEvent(&xev, win) == True)
              return EINA_TRUE;
 
          /* XXX check utf8 or mb */
-         val = XmbLookupString(ic, (XKeyEvent*)&xev,
+         val = XmbLookupString(ic, (XKeyPressedEvent *)&xev,
                                buf, sizeof(buf), &keysym, &status);
+         if(status == XBufferOverflow) {
+            tmp = malloc(sizeof(char)*(val + 1)); 
+            if(!tmp) return EINA_FALSE;
+            compose = tmp;
+
+            /* XXX check utf8 or mb */
+            val = XmbLookupString(ic, (XKeyPressedEvent *)&xev,
+                                  tmp, val, &keysym, &status);
+            if(val > 0) {
+               compose[val] = '\0';
+            } else
+                compose = NULL;
+         } else if(val > 0) {
+            buf[val] = '\0';
+            compose = buf;
+         }
+         printf("compose:%s\n", compose);
+#if 0
+         event->key_down.keyname;
+         event->key_down.modifiers;
+         event->key_down.locks;
+         event->key_down.key;
+         event->key_down.string;
+         event->key_down.compose = buf;
+         event->key_down.timestamp = xevent->time;
+#endif
       }
    }
 
