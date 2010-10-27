@@ -112,7 +112,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
    xim_data = ecore_imf_context_data_get(ctx);
    ic = xim_data_ic_get(xim_data); 
-   if(ic) {
+   if(type == ECORE_IMF_EVENT_KEY_DOWN && ic) {
       dsp = ecore_x_display_get();
       win = xim_data_window_get(xim_data);
       mask = xim_data_event_mask_get(xim_data);
