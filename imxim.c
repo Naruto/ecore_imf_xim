@@ -21,7 +21,6 @@
 
 struct _xim_data_t
 {
-   Ecore_X_Display *dsp;
    Ecore_X_Window win;
    long mask;
    XIM      im;
@@ -29,7 +28,7 @@ struct _xim_data_t
 };
 
 /* prototype */
-struct _xim_data_t *    xim_data_new(Ecore_X_Display *dsp);
+struct _xim_data_t *    xim_data_new();
 void                    xim_data_destroy(struct _xim_data_t *xim_data);
 Ecore_X_Window          xim_data_window_get(struct _xim_data_t *xim_data);
 void xim_data_window_set(struct _xim_data_t *xim_data, Ecore_X_Window win);
@@ -193,14 +192,9 @@ static Ecore_IMF_Context_Class xim_class = {
 Ecore_IMF_Context *xim_imf_module_create(void) {
 #ifdef ENABLE_XIM
    struct _xim_data_t *xim_data = NULL;
-   Ecore_X_Display *dsp = NULL;
    Ecore_IMF_Context *ctx = NULL;
 
-   dsp = ecore_x_display_get();
-   if(!dsp)
-      goto error;
-
-   xim_data = xim_data_new(dsp);
+   xim_data = xim_data_new();
    if(!xim_data)
       goto error;
 
@@ -254,14 +248,16 @@ EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
 /*
  * iternal function
  */
-struct _xim_data_t *xim_data_new(Ecore_X_Display *dsp)
+struct _xim_data_t *xim_data_new()
 {
+   Ecore_X_Display *dsp;
    struct _xim_data_t *xim_data = NULL;
    XIMStyle chosen_style;
    XIMStyles *supported_styles;
    char *ret;
    int i;
 
+   dsp = ecore_x_display_get();
    if(!dsp)
       return NULL;
 
