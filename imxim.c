@@ -45,13 +45,16 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
    EINA_LOG_DBG("%s in\n", __FUNCTION__);
    struct _xim_data_t *xim_data;
    Ecore_X_Window win;
+   Ecore_X_Window old_win;
    XIC ic;
    XIM im;
 
    xim_data = ecore_imf_context_data_get(ctx);
+   old_win = xim_data_window_get(xim_data);
    win = (Ecore_X_Window)((Ecore_Window)window);
-
+   
    im = xim_data_im_get(xim_data);
+#if 0
    if(im) {
       ic = XCreateIC(im,
                      XNInputStyle,
@@ -62,8 +65,8 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
       if (ic) {
          long mask;
 
-         /* XXX */
          XGetICValues(ic, XNFilterEvents, &mask, NULL);
+         printf("ICValues mask:0x%ld\n", mask);
 #if 1
          ecore_x_event_mask_set(win, mask);
 #else
@@ -77,6 +80,7 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
          xim_data_event_mask_set(xim_data, mask);
       }
    }
+#endif
 } /* _ecore_imf_context_xim_client_window_set */
 
 static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
@@ -112,7 +116,6 @@ static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
    if(ic)
       XUnsetICFocus(ic);
 } /* _ecore_imf_context_xim_focus_out */
-
 
 static unsigned int
 _ecore_x_event_reverse_modifiers(unsigned int state)
@@ -159,101 +162,86 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    int val;
    char compose_buffer[256];
    KeySym sym;
-   XComposeStatus status;
    char *compose = NULL;
    char *tmp = NULL;
-   XKeyPressedEvent *xev = NULL;
+   XKeyPressedEvent xev;
    KeyCode _keycode;
    KeySym _keysym;
-
-#if 0
-   printf("event->key_down.keyname:%s\n", event->key_down.keyname);
-   printf("event->key_down.modifiers:0x%x\n", event->key_down.modifiers);
-   printf("event->key_down.locks:%x\n", event->key_down.locks);
-   printf("event->key_down.key:%s\n", event->key_down.key);
-   printf("event->key_down.string:%s\n", event->key_down.string);
-   printf("event->key_down.compose:%s\n", event->key_down.compose);
-   printf("event->key_down.timestamp:%d\n", event->key_down.timestamp);
-#endif
 
    xim_data = ecore_imf_context_data_get(ctx);
    ic = xim_data_ic_get(xim_data); 
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
+      Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
       EINA_LOG_DBG("%s in\n", __FUNCTION__);
+      printf("ev->string:%s ev->compose:%s\n", ev->string, ev->compose);
 
       dsp = ecore_x_display_get();
       win = xim_data_window_get(xim_data);
 
-      xev = calloc(1, sizeof(XKeyPressedEvent));
-      if(!xev) return EINA_TRUE;
-
-      xev->type = KeyPress;
-      xev->serial = 0;            /* hope it doesn't matter */
-      xev->send_event = False; /* XXX */
-      xev->display = dsp;
-      xev->window = win;
-      xev->root = ecore_x_window_root_get(xev->window);
-      xev->subwindow = xev->window;
-      xev->time = event->key_down.timestamp;
-      xev->x = xev->x_root = 0;
-      xev->y = xev->y_root = 0;
-      xev->state = _ecore_x_event_reverse_modifiers(event->key_down.modifiers);
+      xev.type = KeyPress;
+      xev.serial = 0;            /* hope it doesn't matter */
+      xev.send_event = 0;        /* XXX */
+      xev.display = dsp;
+      xev.window = win;
+      xev.root = ecore_x_window_root_get(xev.window);
+      xev.subwindow = xev.window;
+      xev.time = ev->timestamp;
+      xev.x = xev.x_root = 0;
+      xev.y = xev.y_root = 0;
+      xev.state = _ecore_x_event_reverse_modifiers(ev->modifiers);
       _keysym = XStringToKeysym(event->key_down.keyname);
       _keycode = XKeysymToKeycode(dsp, _keysym);
-      // printf("_keysym:%d _keycode:%d\n", _keysym, _keycode);
-      xev->keycode = _keycode;
-      xev->same_screen = (_keycode != 0)? True : False;
+      xev.keycode = _keycode;
+      xev.same_screen = True;
 
 #if 0
-      printf("xev->type:%d\n", xev->type);
-      printf("xev->send_event:%d\n", xev->send_event);
-      printf("xev->state:%x\n", xev->state);
-      printf("xev->keycode:%d\n", xev->keycode);
-      printf("xev->same_screen:%d\n", xev->same_screen);
-#endif      
       if(ic) {
          Status mbstatus;
          EINA_LOG_DBG("%s in\n", __FUNCTION__);
 #ifdef X_HAVE_UTF8_STRING
          val = Xutf8LookupString(ic,
-                                 (XKeyEvent *)xev,
+                                 &xev,
                                  compose_buffer,
                                  sizeof(compose_buffer) - 1,
                                  &sym,
                                  &mbstatus);
 #else /* ifdef X_HAVE_UTF8_STRING */
          val = XmbLookupString(ic,
-                               (XKeyEvent *)xev,
+                               &xev,
                                compose_buffer,
                                sizeof(compose_buffer) - 1,
                                &sym,
                                &mbstatus);
 #endif /* ifdef X_HAVE_UTF8_STRING */
+         printf("mb val:%d status:%d\n", val, mbstatus);
          if (mbstatus == XBufferOverflow) {
                 tmp = malloc(sizeof (char) * (val + 1));
-                if (!tmp) goto error;
+                if (!tmp) {
+                   return EINA_FALSE;
+                }
 
                 compose = tmp;
 
 #ifdef X_HAVE_UTF8_STRING
                 val = Xutf8LookupString(ic,
-                                        (XKeyEvent *)xev,
+                                        (XKeyEvent *)&xev,
                                         tmp,
                                         val,
                                         &sym,
                                         &mbstatus);
 #else /* ifdef X_HAVE_UTF8_STRING */
                 val = XmbLookupString(ic,
-                                      (XKeyEvent *)xevent,
+                                      (XKeyEvent *)&xev,
                                       tmp,
                                       val,
                                       &sym,
                                       &mbstatus);
 #endif /* ifdef X_HAVE_UTF8_STRING */
+                printf("mb overflow val:%d status:%d\n", val, mbstatus);
                 if (val > 0)
                     {
-                       tmp[val] = 0;
+                       tmp[val] = '\0';
 #ifndef X_HAVE_UTF8_STRING
                        compose = eina_str_convert(nl_langinfo(CODESET),
                                                   "UTF-8", tmp);
@@ -264,7 +252,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                 else
                     compose = NULL;
          } else if (val > 0) {
-            compose_buffer[val] = 0;
+            compose_buffer[val] = '\0';
 #ifdef X_HAVE_UTF8_STRING
             compose = strdup(compose_buffer);
 #else /* ifdef X_HAVE_UTF8_STRING */
@@ -272,31 +260,32 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                        compose_buffer);
 #endif /* ifdef X_HAVE_UTF8_STRING */
          }
-      } else {
-         EINA_LOG_DBG("%s in\n", __FUNCTION__);
-         val = XLookupString((XKeyEvent *)xev,
+      } else
+#endif
+          {
+         XComposeStatus status;
+         val = XLookupString(&xev,
                              compose_buffer,
                              sizeof(compose_buffer),
                              &sym,
                              &status);
+         printf("lookup val:%d status.chars_matched:%d\n", val,
+                status.chars_matched);
          if (val > 0) {
-            compose_buffern[val] = 0;
+            compose_buffer[val] = '\0';
             compose = eina_str_convert(nl_langinfo(CODESET),
                                        "UTF-8", compose_buffer);
          }
       }
-      
-      if(compose) {
-         // printf("compose:%s\n", compose);
-         // event->key_down.string = compose;
-         // event->key_down.compose = compose;
+
+      printf("compose:%s\n", compose);
+      if(compose != NULL) {
+         ev->string = compose;
+         ev->compose = compose;
       }
    }
 
    return EINA_FALSE;
- error:
-   free(xev);
-   return EINA_TRUE;
 } /* _ecore_imf_context_xim_filter_event */
 
 static const Ecore_IMF_Context_Info xim_info = {
