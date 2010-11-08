@@ -166,7 +166,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    char *tmp = NULL;
    XKeyPressedEvent xev;
    KeyCode _keycode;
-   KeySym _keysym;
 
    xim_data = ecore_imf_context_data_get(ctx);
    ic = xim_data_ic_get(xim_data); 
@@ -190,8 +189,8 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.x = xev.x_root = 0;
       xev.y = xev.y_root = 0;
       xev.state = _ecore_x_event_reverse_modifiers(ev->modifiers);
-      _keysym = XStringToKeysym(event->key_down.keyname);
-      _keycode = XKeysymToKeycode(dsp, _keysym);
+      _keycode = XKeysymToKeycode(dsp,
+                                  XStringToKeysym(event->key_down.keyname));
       xev.keycode = _keycode;
       xev.same_screen = True;
 
@@ -280,8 +279,8 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
       printf("compose:%s\n", compose);
       if(compose != NULL) {
-         ev->string = compose;
          ev->compose = compose;
+         ev->string = strdup(ev->compose);
       }
    }
 
