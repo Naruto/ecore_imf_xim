@@ -138,6 +138,12 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
    }
 } /* _ecore_imf_context_xim_client_window_set */
 
+static void _ecore_imf_context_xim_get_preedit_string(Ecore_IMF_Context *ctx,
+                                                      char **str,
+                                                      int *cursor_pos) {
+   return;
+}
+
 static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
    EINA_LOG_DBG("%s in\n", __FUNCTION__);
 
@@ -171,6 +177,20 @@ static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
    if(ic)
       XUnsetICFocus(ic);
 } /* _ecore_imf_context_xim_focus_out */
+
+static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
+   return;
+}
+
+static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
+                                                       int cursor_pos) {
+   return;
+}
+
+static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
+                                                   int use_preedit) {
+   return;
+}
 
 static unsigned int
 _ecore_x_event_reverse_modifiers(unsigned int state)
@@ -358,12 +378,12 @@ static Ecore_IMF_Context_Class xim_class = {
    NULL, /* client_canvas_set */
    NULL, /* show */
    NULL, /* hide */
-   NULL, /* get_preedit_string */
+   _ecore_imf_context_xim_get_preedit_string, /* get_preedit_string */
    _ecore_imf_context_xim_focus_in, /* focus_in */
    _ecore_imf_context_xim_focus_out, /* focus_out */
-   NULL, /* reset */
-   NULL, /* cursor_position_set */
-   NULL, /* use_preedit_set */
+   _ecore_imf_context_xim_reset, /* reset */
+   _ecore_imf_context_xim_cursor_position_set, /* cursor_position_set */
+   _ecore_imf_context_xim_use_preedit_set, /* use_preedit_set */
    NULL, /* input_module_set */
    _ecore_imf_context_xim_filter_event, /* filter_event */
 };
