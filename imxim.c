@@ -397,7 +397,6 @@ static Ecore_IMF_Context_Class xim_class = {
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
-#ifdef ENABLE_XIM
    XIM_Data *xim_data = NULL;
    Ecore_IMF_Context *ctx = NULL;
 
@@ -417,37 +416,24 @@ Ecore_IMF_Context *xim_imf_module_create(void) {
    xim_data_destroy(xim_data);
    free(ctx);
    return NULL;
-#else /* ifdef ENABLE_XIM */
-   return NULL;
-#endif  /* ENABLE_XIM */
 } /* xim_imf_module_create */
 
 Ecore_IMF_Context *xim_imf_module_exit(void) {
-#ifdef ENABLE_XIM
    return NULL;
-#else /* ifdef ENABLE_XIM */
-   return NULL;
-#endif  /* ENABLE_XIM */
 } /* xim_imf_module_exit */
 
 Eina_Bool ecore_imf_xim_init(void) {
    EINA_LOG_DBG("%s in\n", __FUNCTION__);
-#ifdef ENABLE_XIM
    ecore_x_init(NULL);
    ecore_imf_module_register(&xim_info,
                              xim_imf_module_create,
                              xim_imf_module_exit);
 
    return EINA_TRUE;
-#else /* ifdef ENABLE_XIM */
-   return EINA_FALSE;
-#endif  /* ENABLE_XIM */
 } /* ecore_imf_xim_init */
 
 void ecore_imf_xim_shutdown(void) {
-#ifdef ENABLE_XIM
    ecore_x_shutdown();
-#endif  /* ENABLE_XIM */
 } /* ecore_imf_xim_shutdown */
 
 EINA_MODULE_INIT(ecore_imf_xim_init);
