@@ -55,12 +55,29 @@ void                    xim_data_im_set(XIM_Data *xim_data, XIM im);
 void xim_data_locale_set(XIM_Data *xim_data, char *locale);
 char *xim_data_locale_get(XIM_Data *xim_data);
 
-static XIM_Im_Info *get_im(Ecore_X_Window *window, char *locale) {
+static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
+   XIM_Data *xim_data = NULL;
+
+   xim_data = xim_data_new();
+   if(!xim_data) return;
+
+   ecore_imf_context_data_set(ctx, xim_data);
+
+   return;
+}
+
+static void _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx) {
+   XIM_Data *xim_data;
+   xim_data = (XIM_Data *)ecore_imf_context_data_get(ctx);
+   xim_data_destroy(xim_data);
+}
+
+static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    Eina_List *l; 
    XIM_Im_Info *im_info = NULL;
    XIM_Im_Info *info = NULL;
    EINA_LIST_FOREACH(open_ims, l, im_info) {
-      if(im_info->win == *window &&
+      if(im_info->win == window &&
          strcmp(im_info->locale, locale) == 0) {
          if(im_info->im) {
             return im_info;
@@ -74,7 +91,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window *window, char *locale) {
    if(!info) {
       info = calloc(1, sizeof(XIM_Im_Info));
       if(!info) return NULL;
-      info->win = *window;
+      info->win = window;
       info->locale = strdup(locale);
    }
 
@@ -111,10 +128,8 @@ static XIM_Im_Info *get_im(Ecore_X_Window *window, char *locale) {
    return NULL;
 }
 
-static void set_ic_client_window(XIM_Data *xim_data,
-                                 Ecore_X_Window *window) {
+static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
    XIC ic;
-   XIM_Data im_data;
    Ecore_X_Window old_win;
 
    /* reinitialize IC */
@@ -126,9 +141,10 @@ static void set_ic_client_window(XIM_Data *xim_data,
 
    old_win = xim_data_window_get(xim_data);
    if(old_win) {
-      xim_data_window_set(xim_data, *window);
+      xim_data_window_set(xim_data, window);
    }
 
+   printf("window:%d\n", window);
    if(window) {
       XIM_Im_Info *info = NULL;
       char *locale;
@@ -196,7 +212,7 @@ static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
 }
 
 static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
-                                                   int use_preedit) {
+                                                   Eina_Bool use_preedit) {
    return;
 }
 
@@ -246,7 +262,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    char compose_buffer[256];
    KeySym sym;
    char *compose = NULL;
-   char *tmp = NULL;
+   // char *tmp = NULL;
    XKeyPressedEvent xev;
    KeyCode _keycode;
 
@@ -380,8 +396,8 @@ static const Ecore_IMF_Context_Info xim_info = {
 };
 
 static Ecore_IMF_Context_Class xim_class = {
-    NULL, /* add */
-    NULL, /* del */
+    _ecore_imf_context_xim_add,                /* add */
+    _ecore_imf_context_xim_del,                /* del */
     _ecore_imf_context_xim_client_window_set,  /* client_window_set */
     NULL, /* client_canvas_set */
     NULL, /* show */
@@ -397,23 +413,15 @@ static Ecore_IMF_Context_Class xim_class = {
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
-   XIM_Data *xim_data = NULL;
    Ecore_IMF_Context *ctx = NULL;
-
-   xim_data = xim_data_new();
-   if(!xim_data)
-       goto error;
 
    ctx = ecore_imf_context_new(&xim_class);
    if(!ctx)
        goto error;
 
-   ecore_imf_context_data_set(ctx, xim_data);
-
    return ctx;
 
  error:
-   xim_data_destroy(xim_data);
    free(ctx);
    return NULL;
 } /* xim_imf_module_create */
@@ -445,7 +453,6 @@ EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
 XIM_Data *xim_data_new()
 {
    XIM_Data *xim_data = NULL;
-   char *ret;
    char *locale;
 
    locale = setlocale(LC_CTYPE, "");
@@ -536,6 +543,7 @@ XIC xim_data_ic_get(XIM_Data *xim_data) {
    if(!xim_data)
        return NULL;
 
+#if 0
    if(!xim_data->ic) {
       XIM ic = NULL;
       ic = XCreateIC(xim_data->im,
@@ -553,6 +561,7 @@ XIC xim_data_ic_get(XIM_Data *xim_data) {
          xim_data->ic = ic; 
       }
    }
+#endif
    return xim_data->ic;
 } /* xim_data_ic_set */
 
