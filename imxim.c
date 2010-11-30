@@ -162,7 +162,7 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
    set_ic_client_window(xim_data, (Ecore_X_Window)((Ecore_Window)window));
 } /* _ecore_imf_context_xim_client_window_set */
 
-static void _ecore_imf_context_xim_get_preedit_string(Ecore_IMF_Context *ctx,
+static void _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
                                                       char **str,
                                                       int *cursor_pos) {
    return;
@@ -396,20 +396,20 @@ static const Ecore_IMF_Context_Info xim_info = {
 };
 
 static Ecore_IMF_Context_Class xim_class = {
-    _ecore_imf_context_xim_add,                /* add */
-    _ecore_imf_context_xim_del,                /* del */
-    _ecore_imf_context_xim_client_window_set,  /* client_window_set */
-    NULL, /* client_canvas_set */
-    NULL, /* show */
-    NULL, /* hide */
-    _ecore_imf_context_xim_get_preedit_string, /* get_preedit_string */
-    _ecore_imf_context_xim_focus_in, /* focus_in */
-    _ecore_imf_context_xim_focus_out, /* focus_out */
-    _ecore_imf_context_xim_reset, /* reset */
-    _ecore_imf_context_xim_cursor_position_set, /* cursor_position_set */
-    _ecore_imf_context_xim_use_preedit_set, /* use_preedit_set */
-    NULL, /* input_module_set */
-    _ecore_imf_context_xim_filter_event, /* filter_event */
+    .add = _ecore_imf_context_xim_add,
+    .del = _ecore_imf_context_xim_del,
+    .client_window_set = _ecore_imf_context_xim_client_window_set,
+    .client_canvas_set = NULL,
+    .show = NULL,
+    .hide = NULL,
+    .preedit_string_get = _ecore_imf_context_xim_preedit_string_get,
+    .focus_in = _ecore_imf_context_xim_focus_in,
+    .focus_out = _ecore_imf_context_xim_focus_out,
+    .reset = _ecore_imf_context_xim_reset,
+    .cursor_position_set = _ecore_imf_context_xim_cursor_position_set,
+    .use_preedit_set = _ecore_imf_context_xim_use_preedit_set,
+    .input_mode_set = NULL,
+    .filter_event = _ecore_imf_context_xim_filter_event, /* filter_event */
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
