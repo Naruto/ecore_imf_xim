@@ -388,11 +388,11 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 } /* _ecore_imf_context_xim_filter_event */
 
 static const Ecore_IMF_Context_Info xim_info = {
-    "xim", /* ID */
-    _("X input method"), /* Description */
-    "ko:ja:th:zh", /* Default locales */
-    "evas", /* Canvas type */
-    1, /* Canvas required */
+    .id = "xim",
+    .description = _("X input method"),
+    .default_locales = "ko:ja:th:zh",
+    .canvas_type = "evas",
+    .canvas_required = 1,
 };
 
 static Ecore_IMF_Context_Class xim_class = {
