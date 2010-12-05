@@ -80,7 +80,7 @@ static XIC get_ic(XIM_Data *xim_data) {
 }
 
 static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    XIM_Data *xim_data = NULL;
 
    xim_data = xim_data_new();
@@ -92,14 +92,14 @@ static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
 }
 
 static void _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    XIM_Data *xim_data;
    xim_data = (XIM_Data *)ecore_imf_context_data_get(ctx);
    xim_data_destroy(xim_data);
 }
 
 static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    Eina_List *l; 
    XIM_Im_Info *im_info = NULL;
    XIM_Im_Info *info = NULL;
@@ -147,7 +147,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    if(!chosen_style)
        goto error;
 
-   EINA_LOG_INFO("info:%p\n", info);
+   EINA_LOG_INFO("info:%p", info);
    return info;
  error:
    free(info->locale);
@@ -157,19 +157,18 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
 }
 
 static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    Ecore_X_Window old_win;
 
    /* reinitialize IC */
    xim_data_ic_reinitialize(xim_data);
 
    old_win = xim_data_window_get(xim_data);
-   EINA_LOG_DBG("old_win:%d\n", old_win);
+   EINA_LOG_DBG("old_win:%d", old_win);
    if(old_win) {
       xim_data_window_set(xim_data, window);
    }
 
-   printf("window:%d\n", window);
    if(window) {
       XIM_Im_Info *info = NULL;
       char *locale;
@@ -181,7 +180,7 @@ static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
 
 static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                                      void              *window) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    XIM_Data *xim_data;
 
    xim_data = ecore_imf_context_data_get(ctx);
@@ -191,35 +190,36 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
 static void _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
                                                       char **str,
                                                       int *cursor_pos) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    return;
 }
 
 static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
 
    XIC ic;
    XIM_Data *xim_data;
    xim_data = ecore_imf_context_data_get(ctx);
    ic = xim_data_ic_get(xim_data);
    if(ic) {
-#if 0                           /* XXX */
       char *str;
+#if 0
       XSetICValues(ic, XNFocusWindow, xevent->xfocus.window, NULL);
+#endif
+
 #ifdef X_HAVE_UTF8_STRING
       if ((str = Xutf8ResetIC(ic)))
 #else
           if ((str = XmbResetIC(ic)))
 #endif
               XFree(str);
-#endif
 
       XSetICFocus(ic);
    }
 } /* _ecore_imf_context_xim_focus_in */
 
 static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
-   EINA_LOG_DBG("%s in\n", __FUNCTION__);
+   EINA_LOG_DBG("%s in", __FUNCTION__);
 
    XIC ic;
    XIM_Data *xim_data;
@@ -235,20 +235,19 @@ static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
 
 static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
                                                        int cursor_pos) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    return;
 }
 
 static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
                                                    Eina_Bool use_preedit) {
-   EINA_LOG_DBG("in\n");
+   EINA_LOG_DBG("in");
    return;
 }
 
 static unsigned int
 _ecore_x_event_reverse_modifiers(unsigned int state)
 {
-#if 0
    unsigned int modifiers = 0;
 
    if (state & ECORE_EVENT_MODIFIER_SHIFT)
@@ -273,14 +272,12 @@ _ecore_x_event_reverse_modifiers(unsigned int state)
        modifiers |= ECORE_X_LOCK_CAPS;
 
    return modifiers;
-#endif
-   return state;
 }
 
 static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                                      Ecore_IMF_Event_Type type,
                                                      Ecore_IMF_Event     *event) {
-   EINA_LOG_DBG("%s in\n", __FUNCTION__);
+   EINA_LOG_DBG("%s in", __FUNCTION__);
    XIM_Data *xim_data;
    XIC ic;
 
@@ -291,7 +288,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    char compose_buffer[256];
    KeySym sym;
    char *compose = NULL;
-   // char *tmp = NULL;
+   char *tmp = NULL;
    XKeyPressedEvent xev;
    KeyCode _keycode;
 
@@ -303,8 +300,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
       Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
-      EINA_LOG_DBG("%s in\n", __FUNCTION__);
-      printf("ev->string:%s ev->compose:%s\n", ev->string, ev->compose);
+      EINA_LOG_DBG("%s in", __FUNCTION__);
 
       dsp = ecore_x_display_get();
       win = xim_data_window_get(xim_data);
@@ -325,10 +321,9 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.keycode = _keycode;
       xev.same_screen = True;
 
-#if 0
       if(ic) {
          Status mbstatus;
-         EINA_LOG_DBG("%s in\n", __FUNCTION__);
+         EINA_LOG_DBG("%s in", __FUNCTION__);
 #ifdef X_HAVE_UTF8_STRING
          val = Xutf8LookupString(ic,
                                  &xev,
@@ -344,7 +339,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                &sym,
                                &mbstatus);
 #endif /* ifdef X_HAVE_UTF8_STRING */
-         printf("mb val:%d status:%d\n", val, mbstatus);
          if (mbstatus == XBufferOverflow) {
             tmp = malloc(sizeof (char) * (val + 1));
             if (!tmp) {
@@ -368,7 +362,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                   &sym,
                                   &mbstatus);
 #endif /* ifdef X_HAVE_UTF8_STRING */
-            printf("mb overflow val:%d status:%d\n", val, mbstatus);
             if (val > 0)
                 {
                    tmp[val] = '\0';
@@ -391,7 +384,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 #endif /* ifdef X_HAVE_UTF8_STRING */
          }
       } else
-#endif
           {
              XComposeStatus status;
              val = XLookupString(&xev,
@@ -399,8 +391,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                  sizeof(compose_buffer),
                                  &sym,
                                  &status);
-             printf("lookup val:%d status.chars_matched:%d\n", val,
-                    status.chars_matched);
              if (val > 0) {
                 compose_buffer[val] = '\0';
                 compose = eina_str_convert(nl_langinfo(CODESET),
@@ -408,8 +398,8 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
              }
           }
 
-      printf("compose:%s\n", compose);
       if(compose) {
+         EINA_LOG_INFO("compose:%s", compose);
          ecore_imf_context_commit_event_add(ctx, compose);
          free(compose);
          return EINA_TRUE;
@@ -445,7 +435,7 @@ static Ecore_IMF_Context_Class xim_class = {
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
-   EINA_LOG_DBG("%s in\n", __FUNCTION__);
+   EINA_LOG_DBG("%s in", __FUNCTION__);
    Ecore_IMF_Context *ctx = NULL;
 
    ctx = ecore_imf_context_new(&xim_class);
@@ -464,7 +454,7 @@ Ecore_IMF_Context *xim_imf_module_exit(void) {
 } /* xim_imf_module_exit */
 
 Eina_Bool ecore_imf_xim_init(void) {
-   EINA_LOG_DBG("%s in\n", __FUNCTION__);
+   EINA_LOG_DBG("%s in", __FUNCTION__);
    ecore_x_init(NULL);
    ecore_imf_module_register(&xim_info,
                              xim_imf_module_create,
