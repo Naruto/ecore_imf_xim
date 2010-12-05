@@ -36,9 +36,9 @@ struct _XIM_Data
 {
     Ecore_X_Window win;
     long mask;
-    XIM      im;
     XIC      ic; /* Input context for composed characters */
     char *locale;
+    XIM_Im_Info *im_info;
 };
 
 /* prototype */
@@ -49,13 +49,38 @@ void xim_data_window_set(XIM_Data *xim_data, Ecore_X_Window win);
 void xim_data_event_mask_set(XIM_Data *xim_data, long mask);
 long xim_data_event_mask_get(XIM_Data *xim_data);
 void xim_data_ic_set(XIM_Data *xim_data, XIC ic);
+void xim_data_ic_reinitialize(XIM_Data *xim_data);
 XIC                     xim_data_ic_get(XIM_Data *xim_data);
-XIM                     xim_data_im_get(XIM_Data *xim_data);
-void                    xim_data_im_set(XIM_Data *xim_data, XIM im);
+XIM_Im_Info *xim_data_im_info_get(XIM_Data *xim_data);
+void xim_data_im_info_set(XIM_Data *xim_data, XIM_Im_Info *im);
 void xim_data_locale_set(XIM_Data *xim_data, char *locale);
 char *xim_data_locale_get(XIM_Data *xim_data);
 
+static XIC get_ic(XIM_Data *xim_data) {
+   XIC ic = xim_data_ic_get(xim_data);
+   if(!ic) {
+      XIM_Im_Info *im_info = xim_data_im_info_get(xim_data);
+      long mask;
+      /* XXX */
+      ic = XCreateIC(im_info->im,
+                     XNInputStyle,
+                     XIMPreeditNothing | XIMStatusNothing,
+                     XNClientWindow,
+                     xim_data->win,
+                     NULL);
+      if(!ic) return NULL;
+
+      XGetICValues(ic, XNFilterEvents, &mask, NULL);
+      ecore_x_event_mask_set(xim_data->win, mask);
+      xim_data->mask = mask;
+      xim_data->ic = ic; 
+   }
+
+   return ic;
+}
+
 static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
+   EINA_LOG_DBG("in\n");
    XIM_Data *xim_data = NULL;
 
    xim_data = xim_data_new();
@@ -67,12 +92,14 @@ static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
 }
 
 static void _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx) {
+   EINA_LOG_DBG("in\n");
    XIM_Data *xim_data;
    xim_data = (XIM_Data *)ecore_imf_context_data_get(ctx);
    xim_data_destroy(xim_data);
 }
 
 static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
+   EINA_LOG_DBG("in\n");
    Eina_List *l; 
    XIM_Im_Info *im_info = NULL;
    XIM_Im_Info *info = NULL;
@@ -120,6 +147,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    if(!chosen_style)
        goto error;
 
+   EINA_LOG_INFO("info:%p\n", info);
    return info;
  error:
    free(info->locale);
@@ -129,17 +157,14 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
 }
 
 static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
-   XIC ic;
+   EINA_LOG_DBG("in\n");
    Ecore_X_Window old_win;
 
    /* reinitialize IC */
-   ic = xim_data_ic_get(xim_data);
-   if(ic) {
-      XDestroyIC(ic);
-      xim_data_ic_set(xim_data, NULL);
-   }
+   xim_data_ic_reinitialize(xim_data);
 
    old_win = xim_data_window_get(xim_data);
+   EINA_LOG_DBG("old_win:%d\n", old_win);
    if(old_win) {
       xim_data_window_set(xim_data, window);
    }
@@ -150,12 +175,13 @@ static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
       char *locale;
       locale = xim_data_locale_get(xim_data);
       info = get_im(window, locale);
-      // xim_data_im_set(xim_data, info);
+      xim_data_im_info_set(xim_data, info);
    }
 }
 
 static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                                      void              *window) {
+   EINA_LOG_DBG("in\n");
    XIM_Data *xim_data;
 
    xim_data = ecore_imf_context_data_get(ctx);
@@ -165,11 +191,12 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
 static void _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
                                                       char **str,
                                                       int *cursor_pos) {
+   EINA_LOG_DBG("in\n");
    return;
 }
 
 static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
-   EINA_LOG_DBG("%s in\n", __FUNCTION__);
+   EINA_LOG_DBG("in\n");
 
    XIC ic;
    XIM_Data *xim_data;
@@ -208,11 +235,13 @@ static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
 
 static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
                                                        int cursor_pos) {
+   EINA_LOG_DBG("in\n");
    return;
 }
 
 static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
                                                    Eina_Bool use_preedit) {
+   EINA_LOG_DBG("in\n");
    return;
 }
 
@@ -268,6 +297,9 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
    xim_data = ecore_imf_context_data_get(ctx);
    ic = xim_data_ic_get(xim_data); 
+   if(!ic) {
+      ic = get_ic(xim_data);
+   }
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
       Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
@@ -413,6 +445,7 @@ static Ecore_IMF_Context_Class xim_class = {
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
+   EINA_LOG_DBG("%s in\n", __FUNCTION__);
    Ecore_IMF_Context *ctx = NULL;
 
    ctx = ecore_imf_context_new(&xim_class);
@@ -466,33 +499,6 @@ XIM_Data *xim_data_new()
    xim_data->locale = strdup(locale);
    if(!xim_data->locale) goto error;
 
-#if 0
-   Ecore_X_Display *dsp;
-   dsp = ecore_x_display_get();
-   if(!dsp) return NULL;
-   if(!XSetLocaleModifiers("")) goto error;
-   xim_data->im = XOpenIM(dsp, NULL, NULL, NULL);
-   if(!xim_data->im)
-       goto error;
-
-   XIMStyles *supported_styles;
-   ret = XGetIMValues(xim_data->im, XNQueryInputStyle,
-                      &supported_styles, NULL);
-   if(ret || !supported_styles)
-       goto error;
-
-   int i;
-   XIMStyle chosen_style;
-   for(i = 0; i < supported_styles->count_styles; i++) {
-      if(supported_styles->supported_styles[i] ==
-         (XIMPreeditNothing | XIMStatusNothing))
-          chosen_style = supported_styles->supported_styles[i];
-   }
-   XFree(supported_styles);
-   if(!chosen_style)
-       goto error;
-#endif
-
    return xim_data;
  error:
    xim_data_destroy(xim_data);
@@ -505,9 +511,6 @@ void xim_data_destroy(XIM_Data *xim_data) {
 
    if(xim_data->ic)
        XDestroyIC(xim_data->ic);
-
-   if(xim_data->im)
-       XCloseIM(xim_data->im);
 
    free(xim_data->locale);
    free(xim_data);
@@ -543,39 +546,29 @@ XIC xim_data_ic_get(XIM_Data *xim_data) {
    if(!xim_data)
        return NULL;
 
-#if 0
-   if(!xim_data->ic) {
-      XIM ic = NULL;
-      ic = XCreateIC(xim_data->im,
-                     XNInputStyle,
-                     XIMPreeditNothing | XIMStatusNothing,
-                     XNClientWindow,
-                     xim_data->win,
-                     NULL);
-      if (ic) {
-         long mask;
-
-         XGetICValues(ic, XNFilterEvents, &mask, NULL);
-         ecore_x_event_mask_set(xim_data->win, mask);
-         xim_data->mask = mask;
-         xim_data->ic = ic; 
-      }
-   }
-#endif
    return xim_data->ic;
 } /* xim_data_ic_set */
 
-XIM xim_data_im_get(XIM_Data *xim_data) {
+void xim_data_ic_reinitialize(XIM_Data *xim_data) {
+   if(!xim_data)
+       return;
+   if(xim_data->ic) {
+      XDestroyIC(xim_data->ic);
+      xim_data->ic = NULL;
+   }
+}
+
+XIM_Im_Info *xim_data_im_info_get(XIM_Data *xim_data) {
    if(!xim_data)
        return NULL;
 
-   return xim_data->im;
+   return xim_data->im_info;
 } /* xim_data_im_get */
 
-void xim_data_im_set(XIM_Data *xim_data, XIM im) {
+void xim_data_im_info_set(XIM_Data *xim_data, XIM_Im_Info *im_info) {
    if(!xim_data)
        return;
-   xim_data->im = im;
+   xim_data->im_info = im_info;
 } /* xim_data_im_set */
 
 void xim_data_locale_set(XIM_Data *xim_data, char *locale) {
