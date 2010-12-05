@@ -129,6 +129,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    info->im = XOpenIM(dsp, NULL, NULL, NULL);
    if(!info->im)
        goto error;
+   EINA_LOG_INFO("im:%p", info->im);
 
    char *ret;
    XIMStyles *supported_styles;
@@ -246,33 +247,46 @@ static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
 }
 
 static unsigned int
-_ecore_x_event_reverse_modifiers(unsigned int state)
-{
+_ecore_x_event_reverse_modifiers(unsigned int state) {
    unsigned int modifiers = 0;
 
-   if (state & ECORE_EVENT_MODIFIER_SHIFT)
-       modifiers |= ECORE_X_MODIFIER_SHIFT;
+   /**< "Control" is pressed */
+   if(state & ECORE_IMF_KEYBOARD_MODIFIER_CTRL)
+       modifiers |= ControlMask;
 
-   if (state & ECORE_EVENT_MODIFIER_CTRL)
-       modifiers |= ECORE_X_MODIFIER_CTRL;
+   /**< "Alt" is pressed */
+   if(state & ECORE_IMF_KEYBOARD_MODIFIER_ALT)
+       ;
 
-   if (state & ECORE_EVENT_MODIFIER_ALT)
-       modifiers |= ECORE_X_MODIFIER_ALT;
+   /**< "Shift" is pressed */
+   if(state & ECORE_IMF_KEYBOARD_MODIFIER_SHIFT)
+      modifiers |= ShiftMask;
 
-   if (state & ECORE_EVENT_MODIFIER_WIN)
-       modifiers |= ECORE_X_MODIFIER_WIN;
-
-   if (state & ECORE_EVENT_LOCK_SCROLL)
-       modifiers |= ECORE_X_LOCK_SCROLL;
-
-   if (state & ECORE_EVENT_LOCK_NUM)
-       modifiers |= ECORE_X_LOCK_NUM;
-
-   if (state & ECORE_EVENT_LOCK_CAPS)
-       modifiers |= ECORE_X_LOCK_CAPS;
+   /**< "Win" (between "Ctrl" and "A */
+   if(state & ECORE_IMF_KEYBOARD_MODIFIER_WIN)
+       ;
 
    return modifiers;
 }
+
+#if 0
+static unsigned int
+_ecore_x_event_reverse_locks(unsigned int state) {
+   unsigned int locks = 0;
+
+   /**< "Num" lock is active */
+   if(state & ECORE_IMF_KEYBOARD_LOCK_NUM)
+       ;
+
+   if(state & ECORE_IMF_KEYBOARD_LOCK_CAPS)
+       ;
+
+   if(state & ECORE_IMF_KEYBOARD_LOCK_SCROLL)
+       ;
+
+   return locks;
+}
+#endif
 
 static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                                      Ecore_IMF_Event_Type type,
@@ -297,6 +311,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    if(!ic) {
       ic = get_ic(xim_data);
    }
+   EINA_LOG_DBG("ic:%p", ic);
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
       Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
@@ -315,6 +330,11 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.time = ev->timestamp;
       xev.x = xev.x_root = 0;
       xev.y = xev.y_root = 0;
+#if 0
+      EINA_LOG_INFO("modifiers:%d", ev->modifiers);
+      EINA_LOG_INFO("after modifiers:%d",
+                    _ecore_x_event_reverse_modifiers(ev->modifiers));
+#endif
       xev.state = _ecore_x_event_reverse_modifiers(ev->modifiers);
       _keycode = XKeysymToKeycode(dsp,
                                   XStringToKeysym(event->key_down.keyname));
@@ -323,7 +343,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
       if(ic) {
          Status mbstatus;
-         EINA_LOG_DBG("%s in", __FUNCTION__);
+         EINA_LOG_DBG("ic:%p", ic);
 #ifdef X_HAVE_UTF8_STRING
          val = Xutf8LookupString(ic,
                                  &xev,
@@ -399,7 +419,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
           }
 
       if(compose) {
-         EINA_LOG_INFO("compose:%s", compose);
+         // EINA_LOG_INFO("compose:%s", compose);
          ecore_imf_context_commit_event_add(ctx, compose);
          free(compose);
          return EINA_TRUE;
