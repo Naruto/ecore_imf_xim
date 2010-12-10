@@ -73,7 +73,7 @@ static XIC get_ic(XIM_Data *xim_data) {
       XGetICValues(ic, XNFilterEvents, &mask, NULL);
       ecore_x_event_mask_set(xim_data->win, mask);
       xim_data->mask = mask;
-      xim_data->ic = ic; 
+      xim_data_ic_set(xim_data, ic);
    }
 
    return ic;
@@ -151,6 +151,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    EINA_LOG_INFO("info:%p", info);
    return info;
  error:
+   EINA_LOG_INFO("error");
    free(info->locale);
    free(info->im);
    free(info);
@@ -165,7 +166,7 @@ static void set_ic_client_window(XIM_Data *xim_data, Ecore_X_Window window) {
    xim_data_ic_reinitialize(xim_data);
 
    old_win = xim_data_window_get(xim_data);
-   EINA_LOG_DBG("old_win:%d", old_win);
+   EINA_LOG_DBG("old_win:%d window:%d window:%d", old_win, window, *window);
    if(old_win) {
       xim_data_window_set(xim_data, window);
    }
@@ -311,7 +312,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    if(!ic) {
       ic = get_ic(xim_data);
    }
-   EINA_LOG_DBG("ic:%p", ic);
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
       Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
@@ -403,23 +403,22 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                        compose_buffer);
 #endif /* ifdef X_HAVE_UTF8_STRING */
          }
-      } else
-          {
-             XComposeStatus status;
-             val = XLookupString(&xev,
-                                 compose_buffer,
-                                 sizeof(compose_buffer),
-                                 &sym,
-                                 &status);
-             if (val > 0) {
-                compose_buffer[val] = '\0';
-                compose = eina_str_convert(nl_langinfo(CODESET),
-                                           "UTF-8", compose_buffer);
-             }
-          }
+      } else {
+         XComposeStatus status;
+         val = XLookupString(&xev,
+                             compose_buffer,
+                             sizeof(compose_buffer),
+                             &sym,
+                             &status);
+         if (val > 0) {
+            compose_buffer[val] = '\0';
+            compose = eina_str_convert(nl_langinfo(CODESET),
+                                       "UTF-8", compose_buffer);
+         }
+      }
 
       if(compose) {
-         // EINA_LOG_INFO("compose:%s", compose);
+         EINA_LOG_INFO("compose:%s", compose);
          ecore_imf_context_commit_event_add(ctx, compose);
          free(compose);
          return EINA_TRUE;
