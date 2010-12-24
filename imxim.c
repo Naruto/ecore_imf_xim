@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <langinfo.h>
+#include <assert.h>
 
 #define _(x) x
 
@@ -29,6 +30,8 @@ struct _XIM_Im_Info
     char *locale;
     XIM      im;
     Eina_List *ics;
+    Eina_Bool reconnecting;
+    XIMStyles *xim_styles;    
 };
 
 typedef struct _XIM_Context XIM_Context;
@@ -42,42 +45,44 @@ struct _XIM_Context
 
 };
 
-
 /* prototype */
-XIM_Context *    xim_data_new();
-void                    xim_data_destroy(XIM_Context *xim_data);
+XIM_Context *    xim_context_new();
+void                    xim_context_destroy(XIM_Context *xim_context);
 #if 0
-Ecore_X_Window          xim_data_window_get(XIM_Context *xim_data);
-void xim_data_window_set(XIM_Context *xim_data, Ecore_X_Window win);
-void xim_data_event_mask_set(XIM_Context *xim_data, long mask);
-long xim_data_event_mask_get(XIM_Context *xim_data);
-void xim_data_ic_set(XIM_Context *xim_data, XIC ic);
-void xim_data_ic_reinitialize(XIM_Context *xim_data);
-XIC                     xim_data_ic_get(XIM_Context *xim_data);
-XIM_Im_Info *xim_data_im_info_get(XIM_Context *xim_data);
-void xim_data_im_info_set(XIM_Context *xim_data, XIM_Im_Info *im);
-void xim_data_locale_set(XIM_Context *xim_data, char *locale);
-char *xim_data_locale_get(XIM_Context *xim_data);
+Ecore_X_Window          xim_context_window_get(XIM_Context *xim_context);
+void xim_context_window_set(XIM_Context *xim_context, Ecore_X_Window win);
+void xim_context_event_mask_set(XIM_Context *xim_context, long mask);
+long xim_context_event_mask_get(XIM_Context *xim_context);
+void xim_context_ic_set(XIM_Context *xim_context, XIC ic);
+void xim_context_ic_reinitialize(XIM_Context *xim_context);
+XIC                     xim_context_ic_get(XIM_Context *xim_context);
+XIM_Im_Info *xim_context_im_info_get(XIM_Context *xim_context);
+void xim_context_im_info_set(XIM_Context *xim_context, XIM_Im_Info *im);
+void xim_context_locale_set(XIM_Context *xim_context, char *locale);
+char *xim_context_locale_get(XIM_Context *xim_context);
 #endif
 
-static XIC get_ic(XIM_Context *xim_data) {
-   XIC ic = xim_data->ic;
+static void reinitialize_ic(XIM_Context *xim_context);
+static void reinitialize_all_ics(XIM_Im_Info *info);
+
+static XIC get_ic(XIM_Context *xim_context) {
+   XIC ic = xim_context->ic;
    if(!ic) {
-      XIM_Im_Info *im_info = xim_data->im_info;
+      XIM_Im_Info *im_info = xim_context->im_info;
       long mask;
       /* XXX */
       ic = XCreateIC(im_info->im,
                      XNInputStyle,
                      XIMPreeditNothing | XIMStatusNothing,
                      XNClientWindow,
-                     xim_data->win,
+                     xim_context->win,
                      NULL);
       if(!ic) return NULL;
 
       XGetICValues(ic, XNFilterEvents, &mask, NULL);
-      ecore_x_event_mask_set(xim_data->win, mask);
-      xim_data->mask = mask;
-      xim_data->ic = ic;
+      ecore_x_event_mask_set(xim_context->win, mask);
+      xim_context->mask = mask;
+      xim_context->ic = ic;
    }
 
    return ic;
@@ -85,54 +90,62 @@ static XIC get_ic(XIM_Context *xim_data) {
 
 static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
    EINA_LOG_DBG("in");
-   XIM_Context *xim_data = NULL;
+   XIM_Context *xim_context = NULL;
 
-   xim_data = xim_data_new();
-   if(!xim_data) return;
+   xim_context = xim_context_new();
+   if(!xim_context) return;
 
-   ecore_imf_context_data_set(ctx, xim_data);
+   ecore_imf_context_data_set(ctx, xim_context);
 }
 
 static void _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx) {
    EINA_LOG_DBG("in");
-   XIM_Context *xim_data;
-   xim_data = (XIM_Context *)ecore_imf_context_data_get(ctx);
-   xim_data_destroy(xim_data);
+   XIM_Context *xim_context;
+   xim_context = (XIM_Context *)ecore_imf_context_data_get(ctx);
+   xim_context_destroy(xim_context);
 }
 
-static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
-   EINA_LOG_DBG("in");
-   Eina_List *l; 
-   XIM_Im_Info *im_info = NULL;
-   XIM_Im_Info *info = NULL;
-   EINA_LIST_FOREACH(open_ims, l, im_info) {
-      if(im_info->win == window &&
-         strcmp(im_info->locale, locale) == 0) {
-         if(im_info->im) {
-            return im_info;
-         } else {
-            info = im_info;
+static void xim_destroy_callback(XIM xim, XPointer client_data,
+                                 XPointer call_data);
+
+static void
+setup_im(XIM_Im_Info *info) {
+  XIMValuesList *ic_values = NULL;
+  XIMCallback im_destroy_callback;
+
+   if(!info->im)
+       return;
+
+  im_destroy_callback.client_data = (XPointer)info;
+  im_destroy_callback.callback = (XIMProc)xim_destroy_callback;
+  XSetIMValues(info->im,
+               XNDestroyCallback, &im_destroy_callback,
+               NULL);
+
+  XGetIMValues(info->im,
+               XNQueryInputStyle, &info->xim_styles,
+               XNQueryICValuesList, &ic_values,
+               NULL);
+
+  if(ic_values) {
+     int i;
+     
+     for(i = 0; i < ic_values->count_values; i++)
+         if(strcmp (ic_values->supported_values[i],
+                    XNStringConversionCallback) == 0) {
+            // info->supports_string_conversion = TRUE;
             break;
          }
-      }
-   }
+#if 0
+     for(i = 0; i < ic_values->count_values; i++)
+         g_print("%s\n", ic_values->supported_values[i]);
+     for(i = 0; i < xim_styles->count_styles; i++)
+         g_print("%#x\n", xim_styles->supported_styles[i]);
+#endif
+     XFree(ic_values);
+  }
 
-   if(!info) {
-      info = calloc(1, sizeof(XIM_Im_Info));
-      if(!info) return NULL;
-      info->win = window;
-      info->locale = strdup(locale);
-   }
-
-   Ecore_X_Display *dsp;
-   dsp = ecore_x_display_get();
-   if(!dsp) goto error;
-   if(!XSetLocaleModifiers("")) goto error;
-   info->im = XOpenIM(dsp, NULL, NULL, NULL);
-   if(!info->im)
-       goto error;
-   EINA_LOG_INFO("im:%p", info->im);
-
+#if 0                           /* legacy code */
    char *ret;
    XIMStyles *supported_styles;
    ret = XGetIMValues(info->im, XNQueryInputStyle, &supported_styles, NULL);
@@ -149,58 +162,157 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
    XFree(supported_styles);
    if(!chosen_style)
        goto error;
+#endif
+}
 
-   EINA_LOG_INFO("info:%p", info);
+static void xim_instantiate_callback(Display *display, XPointer client_data,
+                                     XPointer call_data) {
+   XIM_Im_Info *info = (XIM_Im_Info *)client_data;
+   XIM im = NULL;
+
+   im = XOpenIM(display, NULL, NULL, NULL);
+
+   if(!im)
+       return;
+
+   info->im = im;
+   setup_im (info);
+
+   XUnregisterIMInstantiateCallback (display, NULL, NULL, NULL,
+                                     xim_instantiate_callback,
+                                     (XPointer)info);
+   info->reconnecting = EINA_FALSE;
+}
+
+/* initialize info->im */
+static void xim_info_try_im(XIM_Im_Info *info) {
+   Ecore_X_Display *dsp;
+
+   assert(info->im == NULL);
+   if (info->reconnecting == EINA_TRUE)
+       return;
+
+   if(XSupportsLocale()) {
+      if (!XSetLocaleModifiers (""))
+          EINA_LOG_WARN("Unable to set locale modifiers with XSetLocaleModifiers()");
+      dsp = ecore_x_display_get();
+      info->im = XOpenIM(dsp, NULL, NULL, NULL);
+      if(!info->im) {
+         XRegisterIMInstantiateCallback(dsp,
+                                        NULL, NULL, NULL,
+                                        xim_instantiate_callback,
+                                        (XPointer)info);
+         info->reconnecting = EINA_TRUE;
+         return;
+      }
+      setup_im(info);
+   } 
+}
+
+static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
+   EINA_LOG_DBG("in");
+
+   Eina_List *l; 
+   XIM_Im_Info *im_info = NULL;
+   XIM_Im_Info *info = NULL;
+   EINA_LIST_FOREACH(open_ims, l, im_info) {
+      if(strcmp(im_info->locale, locale) == 0) {
+         if(im_info->im) {
+            return im_info;
+         } else {
+            info = im_info;
+            break;
+         }
+      }
+   }
+
+   if(!info) {
+      info = calloc(1, sizeof(XIM_Im_Info));
+      if(!info) return NULL;
+      open_ims = eina_list_prepend(open_ims, info);
+      info->win = window;
+      info->locale = strdup(locale);
+      info->reconnecting = EINA_FALSE;
+   }
+
+   xim_info_try_im(info);
    return info;
- error:
-   EINA_LOG_INFO("error");
-   free(info->locale);
-   free(info->im);
-   free(info);
-   return NULL;
 }
 
 static void
-reinitialize_ic(XIM_Context *xim_data) {
+xim_destroy_callback (XIM      xim,
+		      XPointer client_data,
+		      XPointer call_data)
+{
+   XIM_Im_Info *info = (XIM_Im_Info *)client_data;
+
+   info->im = NULL;
+
+   /* XXX reset xim info status */
+   // info->status_set = 0;
+   /* XXX reset xim preedit */
+   //info->preedit_set = 0;
+
+   reinitialize_all_ics(info);
+   xim_info_try_im (info);
+   return;
+} 
+
+static void
+reinitialize_ic(XIM_Context *xim_context) {
    XIC ic;
-   ic = xim_data->ic;
+   ic = xim_context->ic;
    if(ic) {
       XDestroyIC(ic);
-      xim_data->ic = NULL;
+      xim_context->ic = NULL;
       /* XXX add preedit change event */
    }
 }
 
-static void set_ic_client_window(XIM_Context *xim_data, Ecore_X_Window window) {
+static void
+reinitialize_all_ics(XIM_Im_Info *info) {
+   Eina_List *tmp_list;
+   void *data;
+   EINA_LIST_FOREACH(info->ics, tmp_list, data)
+    reinitialize_ic (tmp_list->data);
+}
+
+static void set_ic_client_window(XIM_Context *xim_context, Ecore_X_Window window) {
    EINA_LOG_DBG("in");
    Ecore_X_Window old_win;
 
-   reinitialize_ic(xim_data);   /* reinitialize IC */
+   /* reinitialize IC */
+   reinitialize_ic(xim_context);
 
-   old_win = xim_data->win;
+   old_win = xim_context->win;
    EINA_LOG_DBG("old_win:%d window:%d ", old_win, window);
-   if(old_win > 0) {
-      xim_data->im_info->ics = eina_list_remove(xim_data->im_info->ics,
-                                                xim_data);
-      xim_data->im_info = NULL;
+   if(old_win != 0 && old_win != window) {            /* XXX how do check window... */
+      XIM_Im_Info *info;
+      info = xim_context->im_info;
+      EINA_LOG_DBG("info:%p", info);
+      info->ics = eina_list_remove(info->ics, xim_context);
+      EINA_LOG_DBG("");
+      xim_context->im_info = NULL;
    }
 
+   xim_context->win = window;
+
    if(window) {
-      XIM_Im_Info *info = NULL;
-      char *locale;
-      locale = xim_data->locale;
-      info = get_im(window, locale);
-      xim_data->im_info = info;
+         XIM_Im_Info *info = NULL;
+         char *locale;
+         locale = xim_context->locale;
+         info = get_im(window, locale);
+         xim_context->im_info = info;
    }
 }
 
 static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                                      void              *window) {
    EINA_LOG_DBG("in");
-   XIM_Context *xim_data;
+   XIM_Context *xim_context;
 
-   xim_data = ecore_imf_context_data_get(ctx);
-   set_ic_client_window(xim_data, (Ecore_X_Window)((Ecore_Window)window));
+   xim_context = ecore_imf_context_data_get(ctx);
+   set_ic_client_window(xim_context, (Ecore_X_Window)((Ecore_Window)window));
 } /* _ecore_imf_context_xim_client_window_set */
 
 static void _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
@@ -214,9 +326,9 @@ static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
    EINA_LOG_DBG("in");
 
    XIC ic;
-   XIM_Context *xim_data;
-   xim_data = ecore_imf_context_data_get(ctx);
-   ic = xim_data->ic;
+   XIM_Context *xim_context;
+   xim_context = ecore_imf_context_data_get(ctx);
+   ic = xim_context->ic;
    if(ic) {
       char *str;
 #if 0
@@ -238,9 +350,9 @@ static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
    EINA_LOG_DBG("%s in", __FUNCTION__);
 
    XIC ic;
-   XIM_Context *xim_data;
-   xim_data = ecore_imf_context_data_get(ctx);
-   ic = xim_data->ic;
+   XIM_Context *xim_context;
+   xim_context = ecore_imf_context_data_get(ctx);
+   ic = xim_context->ic;
    if(ic)
        XUnsetICFocus(ic);
 } /* _ecore_imf_context_xim_focus_out */
@@ -307,7 +419,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                                      Ecore_IMF_Event_Type type,
                                                      Ecore_IMF_Event     *event) {
    EINA_LOG_DBG("%s in", __FUNCTION__);
-   XIM_Context *xim_data;
+   XIM_Context *xim_context;
    XIC ic;
 
    Ecore_X_Display *dsp;
@@ -321,10 +433,10 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    XKeyPressedEvent xev;
    KeyCode _keycode;
 
-   xim_data = ecore_imf_context_data_get(ctx);
-   ic = xim_data->ic;
+   xim_context = ecore_imf_context_data_get(ctx);
+   ic = xim_context->ic;
    if(!ic) {
-      ic = get_ic(xim_data);
+      ic = get_ic(xim_context);
    }
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
@@ -332,7 +444,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       EINA_LOG_DBG("%s in", __FUNCTION__);
 
       dsp = ecore_x_display_get();
-      win = xim_data->win;
+      win = xim_context->win;
 
       xev.type = KeyPress;
       xev.serial = 0;            /* hope it doesn't matter */
@@ -488,6 +600,7 @@ Ecore_IMF_Context *xim_imf_module_exit(void) {
 
 Eina_Bool ecore_imf_xim_init(void) {
    EINA_LOG_DBG("%s in", __FUNCTION__);
+   eina_init();
    ecore_x_init(NULL);
    ecore_imf_module_register(&xim_info,
                              xim_imf_module_create,
@@ -498,6 +611,7 @@ Eina_Bool ecore_imf_xim_init(void) {
 
 void ecore_imf_xim_shutdown(void) {
    ecore_x_shutdown();
+   eina_shutdown();
 } /* ecore_imf_xim_shutdown */
 
 EINA_MODULE_INIT(ecore_imf_xim_init);
@@ -506,9 +620,9 @@ EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
 /*
  * iternal function
  */
-XIM_Context *xim_data_new()
+XIM_Context *xim_context_new()
 {
-   XIM_Context *xim_data = NULL;
+   XIM_Context *xim_context = NULL;
    char *locale;
 
    locale = setlocale(LC_CTYPE, "");
@@ -516,93 +630,93 @@ XIM_Context *xim_data_new()
 
    if(!XSupportsLocale()) return NULL;
 
-   xim_data = calloc(1, sizeof(XIM_Context));
-   if(!xim_data) return NULL;
+   xim_context = calloc(1, sizeof(XIM_Context));
+   if(!xim_context) return NULL;
 
-   xim_data->locale = strdup(locale);
-   if(!xim_data->locale) goto error;
+   xim_context->locale = strdup(locale);
+   if(!xim_context->locale) goto error;
 
-   return xim_data;
+   return xim_context;
  error:
-   xim_data_destroy(xim_data);
+   xim_context_destroy(xim_context);
    return NULL;
-} /* xim_data_new */
+} /* xim_context_new */
 
-void xim_data_destroy(XIM_Context *xim_data) {
-   if(!xim_data)
+void xim_context_destroy(XIM_Context *xim_context) {
+   if(!xim_context)
        return;
 
-   if(xim_data->ic)
-       XDestroyIC(xim_data->ic);
+   if(xim_context->ic)
+       XDestroyIC(xim_context->ic);
 
-   free(xim_data->locale);
-   free(xim_data);
-} /* xim_data_destroy */
+   free(xim_context->locale);
+   free(xim_context);
+} /* xim_context_destroy */
 
 #if 0
-Ecore_X_Window xim_data_window_get(XIM_Context *xim_data) {
-   if(!xim_data) return -1;     /* XXX */
-   return xim_data->win;
+Ecore_X_Window xim_context_window_get(XIM_Context *xim_context) {
+   if(!xim_context) return -1;     /* XXX */
+   return xim_context->win;
 }
 
-void xim_data_window_set(XIM_Context *xim_data, Ecore_X_Window win) {
-   if(!xim_data) return;
-   xim_data->win = win;
+void xim_context_window_set(XIM_Context *xim_context, Ecore_X_Window win) {
+   if(!xim_context) return;
+   xim_context->win = win;
 }
 
-void xim_data_event_mask_set(XIM_Context *xim_data, long mask) {
-   if(!xim_data) return;
-   xim_data->mask = mask;
+void xim_context_event_mask_set(XIM_Context *xim_context, long mask) {
+   if(!xim_context) return;
+   xim_context->mask = mask;
 }
 
-long xim_data_event_mask_get(XIM_Context *xim_data) {
-   if(!xim_data) return 0;
-   return xim_data->mask;
+long xim_context_event_mask_get(XIM_Context *xim_context) {
+   if(!xim_context) return 0;
+   return xim_context->mask;
 }
 
-void xim_data_ic_set(XIM_Context *xim_data, XIC ic) {
-   if(!xim_data)
+void xim_context_ic_set(XIM_Context *xim_context, XIC ic) {
+   if(!xim_context)
        return;
-   xim_data->ic = ic;
+   xim_context->ic = ic;
 }
 
-XIC xim_data_ic_get(XIM_Context *xim_data) {
-   if(!xim_data)
+XIC xim_context_ic_get(XIM_Context *xim_context) {
+   if(!xim_context)
        return NULL;
 
-   return xim_data->ic;
-} /* xim_data_ic_set */
+   return xim_context->ic;
+} /* xim_context_ic_set */
 
-void xim_data_ic_reinitialize(XIM_Context *xim_data) {
-   if(!xim_data)
+void xim_context_ic_reinitialize(XIM_Context *xim_context) {
+   if(!xim_context)
        return;
-   if(xim_data->ic) {
-      XDestroyIC(xim_data->ic);
-      xim_data->ic = NULL;
+   if(xim_context->ic) {
+      XDestroyIC(xim_context->ic);
+      xim_context->ic = NULL;
    }
 }
 
-XIM_Im_Info *xim_data_im_info_get(XIM_Context *xim_data) {
-   if(!xim_data)
+XIM_Im_Info *xim_context_im_info_get(XIM_Context *xim_context) {
+   if(!xim_context)
        return NULL;
 
-   return xim_data->im_info;
-} /* xim_data_im_get */
+   return xim_context->im_info;
+} /* xim_context_im_get */
 
-void xim_data_im_info_set(XIM_Context *xim_data, XIM_Im_Info *im_info) {
-   if(!xim_data)
+void xim_context_im_info_set(XIM_Context *xim_context, XIM_Im_Info *im_info) {
+   if(!xim_context)
        return;
-   xim_data->im_info = im_info;
-} /* xim_data_im_set */
+   xim_context->im_info = im_info;
+} /* xim_context_im_set */
 
-void xim_data_locale_set(XIM_Context *xim_data, char *locale) {
-   if(!xim_data) return;
-   if(xim_data->locale) free(xim_data->locale);
-   xim_data->locale = strdup(locale);
+void xim_context_locale_set(XIM_Context *xim_context, char *locale) {
+   if(!xim_context) return;
+   if(xim_context->locale) free(xim_context->locale);
+   xim_context->locale = strdup(locale);
 }
 
-char *xim_data_locale_get(XIM_Context *xim_data) {
-   if(!xim_data) return NULL;
-   return xim_data->locale;
+char *xim_context_locale_get(XIM_Context *xim_context) {
+   if(!xim_context) return NULL;
+   return xim_context->locale;
 }
 #endif
