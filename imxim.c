@@ -1,5 +1,5 @@
 /*
-  gcc -Wall -fPIC -DENABLE_XIM `pkg-config ecore --cflags --libs` -c imxim.c
+  gcc -Wall -fPIC `pkg-config ecore --cflags --libs` -c imxim.c
   gcc -Wall -shared -Wl,-soname,im-xim.so -o im-xim.so ./imxim.o
 */
 #include <Eina.h>
@@ -291,7 +291,6 @@ static void set_ic_client_window(XIM_Context *xim_context, Ecore_X_Window window
       info = xim_context->im_info;
       EINA_LOG_DBG("info:%p", info);
       info->ics = eina_list_remove(info->ics, xim_context);
-      EINA_LOG_DBG("");
       xim_context->im_info = NULL;
    }
 
@@ -415,6 +414,18 @@ _ecore_x_event_reverse_locks(unsigned int state) {
 }
 #endif
 
+static KeyCode _keycode_get(Ecore_X_Display *dsp, const char *keyname) {
+   KeyCode keycode;
+
+   if(strcmp(keyname, "Keycode-0") == 0) { /* XXX fix */
+      keycode = 0;
+   } else {
+      keycode = XKeysymToKeycode(dsp, XStringToKeysym(keyname));
+   }
+
+   return keycode;
+}
+
 static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                                                      Ecore_IMF_Event_Type type,
                                                      Ecore_IMF_Event     *event) {
@@ -431,7 +442,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    char *compose = NULL;
    char *tmp = NULL;
    XKeyPressedEvent xev;
-   KeyCode _keycode;
 
    xim_context = ecore_imf_context_data_get(ctx);
    ic = xim_context->ic;
@@ -441,18 +451,18 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN) {
       Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
-      EINA_LOG_DBG("%s in", __FUNCTION__);
+      EINA_LOG_DBG("ECORE_IMF_EVENT_KEY_DOWN");
 
       dsp = ecore_x_display_get();
       win = xim_context->win;
 
       xev.type = KeyPress;
       xev.serial = 0;            /* hope it doesn't matter */
-      xev.send_event = 0;        /* XXX */
+      xev.send_event = 0;        /* XXX change send_event value */
       xev.display = dsp;
       xev.window = win;
-      xev.root = ecore_x_window_root_get(xev.window);
-      xev.subwindow = xev.window;
+      xev.root = ecore_x_window_root_get(win);
+      xev.subwindow = win;
       xev.time = ev->timestamp;
       xev.x = xev.x_root = 0;
       xev.y = xev.y_root = 0;
@@ -462,10 +472,15 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
                     _ecore_x_event_reverse_modifiers(ev->modifiers));
 #endif
       xev.state = _ecore_x_event_reverse_modifiers(ev->modifiers);
-      _keycode = XKeysymToKeycode(dsp,
-                                  XStringToKeysym(event->key_down.keyname));
-      xev.keycode = _keycode;
+      xev.keycode = _keycode_get(dsp, ev->keyname);
       xev.same_screen = True;
+
+#if 0                           /* XXX  */
+      if (XFilterEvent((XEvent *)&xev, NULL) == True) {
+         printf("filter event\n");
+         return EINA_TRUE;
+      }
+#endif
 
       if(ic) {
          Status mbstatus;
@@ -543,6 +558,7 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
          }
       }
 
+      // EINA_LOG_INFO("compose:%s", compose);
       if(compose) {
          EINA_LOG_INFO("compose:%s", compose);
          ecore_imf_context_commit_event_add(ctx, compose);
