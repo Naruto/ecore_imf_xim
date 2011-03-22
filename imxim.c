@@ -54,19 +54,6 @@ struct _XIM_Context
 /* prototype */
 XIM_Context *    xim_context_new();
 void                    xim_context_destroy(XIM_Context *xim_context);
-#if 0
-Ecore_X_Window          xim_context_window_get(XIM_Context *xim_context);
-void xim_context_window_set(XIM_Context *xim_context, Ecore_X_Window win);
-void xim_context_event_mask_set(XIM_Context *xim_context, long mask);
-long xim_context_event_mask_get(XIM_Context *xim_context);
-void xim_context_ic_set(XIM_Context *xim_context, XIC ic);
-void xim_context_ic_reinitialize(XIM_Context *xim_context);
-XIC                     xim_context_ic_get(XIM_Context *xim_context);
-XIM_Im_Info *xim_context_im_info_get(XIM_Context *xim_context);
-void xim_context_im_info_set(XIM_Context *xim_context, XIM_Im_Info *im);
-void xim_context_locale_set(XIM_Context *xim_context, char *locale);
-char *xim_context_locale_get(XIM_Context *xim_context);
-#endif
 
 static void reinitialize_ic(XIM_Context *xim_context);
 static void reinitialize_all_ics(XIM_Im_Info *info);
@@ -750,70 +737,3 @@ void xim_context_destroy(XIM_Context *xim_context) {
    free(xim_context);
 } /* xim_context_destroy */
 
-#if 0
-Ecore_X_Window xim_context_window_get(XIM_Context *xim_context) {
-   if(!xim_context) return -1;     /* XXX */
-   return xim_context->win;
-}
-
-void xim_context_window_set(XIM_Context *xim_context, Ecore_X_Window win) {
-   if(!xim_context) return;
-   xim_context->win = win;
-}
-
-void xim_context_event_mask_set(XIM_Context *xim_context, long mask) {
-   if(!xim_context) return;
-   xim_context->mask = mask;
-}
-
-long xim_context_event_mask_get(XIM_Context *xim_context) {
-   if(!xim_context) return 0;
-   return xim_context->mask;
-}
-
-void xim_context_ic_set(XIM_Context *xim_context, XIC ic) {
-   if(!xim_context)
-       return;
-   xim_context->ic = ic;
-}
-
-XIC xim_context_ic_get(XIM_Context *xim_context) {
-   if(!xim_context)
-       return NULL;
-
-   return xim_context->ic;
-} /* xim_context_ic_set */
-
-void xim_context_ic_reinitialize(XIM_Context *xim_context) {
-   if(!xim_context)
-       return;
-   if(xim_context->ic) {
-      XDestroyIC(xim_context->ic);
-      xim_context->ic = NULL;
-   }
-}
-
-XIM_Im_Info *xim_context_im_info_get(XIM_Context *xim_context) {
-   if(!xim_context)
-       return NULL;
-
-   return xim_context->im_info;
-} /* xim_context_im_get */
-
-void xim_context_im_info_set(XIM_Context *xim_context, XIM_Im_Info *im_info) {
-   if(!xim_context)
-       return;
-   xim_context->im_info = im_info;
-} /* xim_context_im_set */
-
-void xim_context_locale_set(XIM_Context *xim_context, char *locale) {
-   if(!xim_context) return;
-   if(xim_context->locale) free(xim_context->locale);
-   xim_context->locale = strdup(locale);
-}
-
-char *xim_context_locale_get(XIM_Context *xim_context) {
-   if(!xim_context) return NULL;
-   return xim_context->locale;
-}
-#endif
