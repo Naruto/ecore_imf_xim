@@ -1,6 +1,6 @@
 /*
-  gcc -Wall -fPIC `pkg-config ecore --cflags --libs` -c imxim.c
-  gcc -Wall -shared -Wl,-soname,im-xim.so -o im-xim.so ./imxim.o
+  gcc -Wall -Werror -fPIC `pkg-config ecore --cflags --libs` -c imxim.c
+  gcc -Wall -Werror -shared -Wl,-soname,im-xim.so -o im-xim.so ./imxim.o
 */
 #include <Eina.h>
 #include <Ecore.h>
@@ -32,6 +32,7 @@ struct _XIM_Im_Info
     Eina_List *ics;
     Eina_Bool reconnecting;
     XIMStyles *xim_styles;    
+
 };
 
 typedef struct _XIM_Context XIM_Context;
@@ -42,7 +43,12 @@ struct _XIM_Context
     XIC ic; /* Input context for composed characters */
     char *locale;
     XIM_Im_Info *im_info;
-
+    int preedit_length;
+    Eina_Bool use_preedit;
+    Eina_Bool filter_key_release;
+    Eina_Bool finalizing;       /* XXX finalize() に該当するものは？ */
+    Eina_Bool has_focus;
+    Eina_Bool in_toplevel;
 };
 
 /* prototype */
@@ -94,6 +100,12 @@ static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
 
    xim_context = xim_context_new();
    if(!xim_context) return;
+
+   xim_context->use_preedit = EINA_TRUE;
+   xim_context->filter_key_release = EINA_FALSE;
+   xim_context->finalizing = EINA_FALSE;
+   xim_context->has_focus = EINA_FALSE;
+   xim_context->in_toplevel = EINA_FALSE;
 
    ecore_imf_context_data_set(ctx, xim_context);
 }
@@ -248,13 +260,14 @@ xim_destroy_callback (XIM      xim,
 
    info->im = NULL;
 
+   /* これって gconf だけの設定項目? */
    /* XXX reset xim info status */
    // info->status_set = 0;
    /* XXX reset xim preedit */
    //info->preedit_set = 0;
 
    reinitialize_all_ics(info);
-   xim_info_try_im (info);
+   xim_info_try_im(info);
    return;
 } 
 
@@ -265,7 +278,13 @@ reinitialize_ic(XIM_Context *xim_context) {
    if(ic) {
       XDestroyIC(ic);
       xim_context->ic = NULL;
-      /* XXX add preedit change event */
+      if(xim_context->preedit_length) {
+         xim_context->preedit_length = 0;
+         if (xim_context->finalizing == EINA_FALSE)
+             ;
+             /* XXX */
+             /* ecore_imf_context_preedit_changed_event_add(); */
+      }
    }
 }
 
@@ -357,7 +376,60 @@ static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
 } /* _ecore_imf_context_xim_focus_out */
 
 static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
-   return;
+   XIC ic;
+   XIM_Context *xim_context;
+   char *result;
+
+   /* restore conversion state after resetting ic later */
+   XIMPreeditState preedit_state = XIMPreeditUnKnown;
+   XVaNestedList preedit_attr;
+   Eina_Bool  have_preedit_state = EINA_FALSE;
+
+   xim_context = ecore_imf_context_data_get(ctx);
+   ic = xim_context->ic;
+   if(!ic)
+       return;
+
+   if(xim_context->preedit_length == 0)
+       return;
+
+   preedit_attr = XVaCreateNestedList(0,
+                                      XNPreeditState, &preedit_state,
+                                      NULL);
+   if(!XGetICValues(ic,
+                    XNPreeditAttributes, preedit_attr,
+                    NULL))
+       have_preedit_state = EINA_TRUE;
+
+   XFree(preedit_attr);
+
+   result = XmbResetIC(ic);
+
+   preedit_attr = XVaCreateNestedList(0,
+                                      XNPreeditState, preedit_state,
+                                      NULL);
+   if(have_preedit_state)
+       XSetICValues(ic,
+                    XNPreeditAttributes, preedit_attr,
+                    NULL);
+
+   XFree(preedit_attr);
+
+   if(result) {
+      /* XXX convert to utf8 */
+      char *result_utf8 = strdup(result);
+      if(result_utf8) {
+         ecore_imf_context_commit_event_add(ctx, result_utf8);
+         free(result_utf8);
+      }
+   }
+
+   if(xim_context->preedit_length) {
+      xim_context->preedit_length = 0;
+      ecore_imf_context_preedit_changed_event_add(ctx); 
+   }
+
+   XFree (result);
 }
 
 static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
@@ -369,7 +441,16 @@ static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
 static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
                                                    Eina_Bool use_preedit) {
    EINA_LOG_DBG("in");
-   return;
+
+   XIM_Context *xim_context;
+   xim_context = ecore_imf_context_data_get(ctx);
+  
+   use_preedit = use_preedit != EINA_FALSE;
+
+   if(xim_context->use_preedit != use_preedit) {
+      xim_context->use_preedit = use_preedit;
+      reinitialize_ic(xim_context);
+   }
 }
 
 static unsigned int
