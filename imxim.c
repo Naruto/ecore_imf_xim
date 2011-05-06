@@ -688,6 +688,8 @@ static Ecore_IMF_Context_Class xim_class = {
     .use_preedit_set = _ecore_imf_context_xim_use_preedit_set,
     .input_mode_set = NULL,
     .filter_event = _ecore_imf_context_xim_filter_event,
+    .prediction_allow_set = NULL,
+    .autocapital_type_set = NULL,
 };
 
 Ecore_IMF_Context *xim_imf_module_create(void) {
