@@ -53,12 +53,13 @@ struct _XIM_Context
 
 /* prototype */
 XIM_Context *    xim_context_new();
-void                    xim_context_destroy(XIM_Context *xim_context);
-
+void             xim_context_destroy(XIM_Context *xim_context);
 static void reinitialize_ic(XIM_Context *xim_context);
 static void reinitialize_all_ics(XIM_Im_Info *info);
 
-static XIC get_ic(XIM_Context *xim_context) {
+static XIC
+get_ic(XIM_Context *xim_context)
+{
    XIC ic = xim_context->ic;
    if(!ic) {
       XIM_Im_Info *im_info = xim_context->im_info;
@@ -81,7 +82,9 @@ static XIC get_ic(XIM_Context *xim_context) {
    return ic;
 }
 
-static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
+static void
+_ecore_imf_context_xim_add(Ecore_IMF_Context *ctx)
+{
    EINA_LOG_DBG("in");
    XIM_Context *xim_context = NULL;
 
@@ -97,20 +100,23 @@ static void _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx) {
    ecore_imf_context_data_set(ctx, xim_context);
 }
 
-static void _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx) {
+static void
+_ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
+{
    EINA_LOG_DBG("in");
    XIM_Context *xim_context;
    xim_context = (XIM_Context *)ecore_imf_context_data_get(ctx);
    xim_context_destroy(xim_context);
 }
 
+/* proto type */
 static void xim_destroy_callback(XIM xim, XPointer client_data,
                                  XPointer call_data);
 
 static void
 setup_im(XIM_Im_Info *info) {
-  XIMValuesList *ic_values = NULL;
-  XIMCallback im_destroy_callback;
+   XIMValuesList *ic_values = NULL;
+   XIMCallback im_destroy_callback;
 
    if(!info->im)
        return;
@@ -164,8 +170,10 @@ setup_im(XIM_Im_Info *info) {
 #endif
 }
 
-static void xim_instantiate_callback(Display *display, XPointer client_data,
-                                     XPointer call_data) {
+static void
+xim_instantiate_callback(Display *display, XPointer client_data,
+                         XPointer call_data)
+{
    XIM_Im_Info *info = (XIM_Im_Info *)client_data;
    XIM im = NULL;
 
@@ -184,7 +192,9 @@ static void xim_instantiate_callback(Display *display, XPointer client_data,
 }
 
 /* initialize info->im */
-static void xim_info_try_im(XIM_Im_Info *info) {
+static void
+xim_info_try_im(XIM_Im_Info *info)
+{
    Ecore_X_Display *dsp;
 
    assert(info->im == NULL);
@@ -208,7 +218,9 @@ static void xim_info_try_im(XIM_Im_Info *info) {
    } 
 }
 
-static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
+static XIM_Im_Info*
+get_im(Ecore_X_Window window, char *locale)
+{
    EINA_LOG_DBG("in");
 
    Eina_List *l; 
@@ -239,9 +251,7 @@ static XIM_Im_Info *get_im(Ecore_X_Window window, char *locale) {
 }
 
 static void
-xim_destroy_callback (XIM      xim,
-		      XPointer client_data,
-		      XPointer call_data)
+xim_destroy_callback(XIM      xim, XPointer client_data, XPointer call_data)
 {
    XIM_Im_Info *info = (XIM_Im_Info *)client_data;
 
@@ -259,7 +269,8 @@ xim_destroy_callback (XIM      xim,
 } 
 
 static void
-reinitialize_ic(XIM_Context *xim_context) {
+reinitialize_ic(XIM_Context *xim_context)
+{
    XIC ic;
    ic = xim_context->ic;
    if(ic) {
@@ -276,14 +287,17 @@ reinitialize_ic(XIM_Context *xim_context) {
 }
 
 static void
-reinitialize_all_ics(XIM_Im_Info *info) {
+reinitialize_all_ics(XIM_Im_Info *info)
+ {
    Eina_List *tmp_list;
    void *data;
    EINA_LIST_FOREACH(info->ics, tmp_list, data)
     reinitialize_ic (tmp_list->data);
 }
 
-static void set_ic_client_window(XIM_Context *xim_context, Ecore_X_Window window) {
+static void
+ set_ic_client_window(XIM_Context *xim_context, Ecore_X_Window window)
+{
    EINA_LOG_DBG("in");
    Ecore_X_Window old_win;
 
@@ -311,8 +325,10 @@ static void set_ic_client_window(XIM_Context *xim_context, Ecore_X_Window window
    }
 }
 
-static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
-                                                     void              *window) {
+static void
+_ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
+                                         void              *window)
+{
    EINA_LOG_DBG("in");
    XIM_Context *xim_context;
 
@@ -320,14 +336,20 @@ static void _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
    set_ic_client_window(xim_context, (Ecore_X_Window)((Ecore_Window)window));
 } /* _ecore_imf_context_xim_client_window_set */
 
-static void _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
-                                                      char **str,
-                                                      int *cursor_pos) {
-   EINA_LOG_DBG("in");
-   return;
+static void
+_ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
+                                          char **str,
+                                          int *cursor_pos)
+{
+   XIM_Context *xim_context;
+
+   xim_context = ecore_imf_context_data_get(ctx);
+   
 }
 
-static void _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx) {
+static void
+_ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx)
+{
    EINA_LOG_DBG("in");
 
    XIC ic;
@@ -419,14 +441,18 @@ static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
    XFree (result);
 }
 
-static void _ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
-                                                       int cursor_pos) {
+static void
+_ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
+                                           int cursor_pos)
+{
    EINA_LOG_DBG("in");
    return;
 }
 
-static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
-                                                   Eina_Bool use_preedit) {
+static void
+_ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
+                                       Eina_Bool use_preedit)
+{
    EINA_LOG_DBG("in");
 
    XIM_Context *xim_context;
@@ -441,7 +467,8 @@ static void _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
 }
 
 static unsigned int
-_ecore_x_event_reverse_modifiers(unsigned int state) {
+_ecore_x_event_reverse_modifiers(unsigned int state)
+{
    unsigned int modifiers = 0;
 
    /**< "Control" is pressed */
