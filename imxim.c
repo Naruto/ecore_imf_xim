@@ -59,7 +59,7 @@ struct _Ecore_IMF_Context_Data
 Ecore_IMF_Context_Data *imf_context_data_new();
 void             imf_context_data_destroy(Ecore_IMF_Context_Data *imf_context_data);
 static void reinitialize_ic(Ecore_IMF_Context_Data *imf_context_data);
-static void reinitialize_all_ics(XIM_Im_Info *info);
+// static void reinitialize_all_ics(XIM_Im_Info *info);
 
 static int
 preedit_start_callback(XIC xic, XPointer client_data, XPointer call_data)
@@ -208,18 +208,6 @@ _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
 static void
 xim_destroy_callback(XIM xim, XPointer client_data, XPointer call_data)
 {
-   XIM_Im_Info *info = (XIM_Im_Info *)client_data;
-
-   info->im = NULL;
-
-   /* これって gconf だけの設定項目? */
-   /* XXX reset xim info status */
-   // info->status_set = 0;
-   /* XXX reset xim preedit */
-   //info->preedit_set = 0;
-
-   reinitialize_all_ics(info);
-   xim_info_try_im(info);
    return;
 } 
 
@@ -379,6 +367,7 @@ reinitialize_ic(Ecore_IMF_Context_Data *imf_context_data)
    }
 }
 
+#if 0
 static void
 reinitialize_all_ics(XIM_Im_Info *info)
  {
@@ -389,9 +378,11 @@ reinitialize_all_ics(XIM_Im_Info *info)
     reinitialize_ic (tmp_list->data);
 #endif
 }
+#endif
 
 static void
- set_ic_client_window(Ecore_IMF_Context_Data *imf_context_data, Ecore_X_Window window)
+set_ic_client_window(Ecore_IMF_Context_Data *imf_context_data,
+                     Ecore_X_Window window)
 {
    EINA_LOG_DBG("in");
    Ecore_X_Window old_win;
@@ -428,7 +419,8 @@ _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
    Ecore_IMF_Context_Data *imf_context_data;
 
    imf_context_data = ecore_imf_context_data_get(ctx);
-   set_ic_client_window(imf_context_data, (Ecore_X_Window)((Ecore_Window)window));
+   set_ic_client_window(imf_context_data,
+                        (Ecore_X_Window)((Ecore_Window)window));
 } /* _ecore_imf_context_xim_client_window_set */
 
 static void
@@ -665,8 +657,8 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.keycode = _keycode_get(dsp, ev->keyname);
       xev.same_screen = True;
 
-#if 0                           /* XXX  */
-      if (XFilterEvent((XEvent *)&xev, NULL) == True) {
+#if 1                           /* XXX  */
+      if (XFilterEvent((XEvent *)&xev, (Window)NULL) == True) {
          printf("filter event\n");
          return EINA_TRUE;
       }
