@@ -12,7 +12,6 @@
 #include <X11/Xlocale.h>
 #include <X11/Xutil.h>
 #include <X11/keysym.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -159,12 +158,11 @@ get_ic(Ecore_IMF_Context *ctx)
       long mask;
       XVaNestedList preedit_attr = preedit_callback_set(ctx);
 
-      /* XXX */
       ic = XCreateIC(im_info->im,
-                     XNInputStyle,
-                     XIMPreeditNothing | XIMStatusNothing,
+                     XNInputStyle, XIMPreeditCallbacks | XIMStatusNothing,
                      XNClientWindow, imf_context_data->win,
-                     XNPreeditAttributes, preedit_attr,
+                     XNPreeditAttributes, NULL
+                     XNStatusAttributes, NULL,
                      NULL);
       XFree(preedit_attr);
       if(!ic) return NULL;
@@ -392,7 +390,7 @@ set_ic_client_window(Ecore_IMF_Context_Data *imf_context_data,
 
    old_win = imf_context_data->win;
    EINA_LOG_DBG("old_win:%d window:%d ", old_win, window);
-   if(old_win != 0 && old_win != window) {            /* XXX how do check window... */
+   if(old_win != 0 && old_win != window) { /* XXX how do check window... */
       XIM_Im_Info *info;
       info = imf_context_data->im_info;
       EINA_LOG_DBG("info:%p", info);
@@ -402,7 +400,7 @@ set_ic_client_window(Ecore_IMF_Context_Data *imf_context_data,
 
    imf_context_data->win = window;
 
-   if(window) {
+   if(window) {                 /* XXX */
          XIM_Im_Info *info = NULL;
          char *locale;
          locale = imf_context_data->locale;
@@ -429,8 +427,9 @@ _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
                                           int *cursor_pos)
 {
 #if 0
-   Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = ecore_imf_context_data_get(ctx);
+   XIM_Context *xim_context;
+
+   xim_context = ecore_imf_context_data_get(ctx);
 #endif
 }
 
@@ -564,7 +563,7 @@ _ecore_x_event_reverse_modifiers(unsigned int state)
 
    /**< "Alt" is pressed */
    if(state & ECORE_IMF_KEYBOARD_MODIFIER_ALT)
-       ;
+       modifiers |= Mod1Mask;
 
    /**< "Shift" is pressed */
    if(state & ECORE_IMF_KEYBOARD_MODIFIER_SHIFT)
@@ -572,32 +571,32 @@ _ecore_x_event_reverse_modifiers(unsigned int state)
 
    /**< "Win" (between "Ctrl" and "A */
    if(state & ECORE_IMF_KEYBOARD_MODIFIER_WIN)
-       ;
+     modifiers |= Mod5Mask;
 
    return modifiers;
 }
 
-#if 0
 static unsigned int
 _ecore_x_event_reverse_locks(unsigned int state) {
    unsigned int locks = 0;
 
    /**< "Num" lock is active */
    if(state & ECORE_IMF_KEYBOARD_LOCK_NUM)
-       ;
+       locks |= Mod3Mask;
 
    if(state & ECORE_IMF_KEYBOARD_LOCK_CAPS)
-       ;
+       locks |= LockMask;
 
    if(state & ECORE_IMF_KEYBOARD_LOCK_SCROLL)
-       ;
+       ;                        /* XXX */
 
    return locks;
 }
-#endif
 
 static KeyCode _keycode_get(Ecore_X_Display *dsp, const char *keyname) {
    KeyCode keycode;
+
+   EINA_LOG_DBG("keyname:%s keysym:%lu", keyname, XStringToKeysym(keyname));
 
    if(strcmp(keyname, "Keycode-0") == 0) { /* XXX fix */
       keycode = 0;
@@ -648,17 +647,19 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.time = ev->timestamp;
       xev.x = xev.x_root = 0;
       xev.y = xev.y_root = 0;
-#if 0
+#if 1
       EINA_LOG_INFO("modifiers:%d", ev->modifiers);
       EINA_LOG_INFO("after modifiers:%d",
                     _ecore_x_event_reverse_modifiers(ev->modifiers));
 #endif
-      xev.state = _ecore_x_event_reverse_modifiers(ev->modifiers);
+      xev.state = 0;
+      xev.state |= _ecore_x_event_reverse_modifiers(ev->modifiers);
+      xev.state |= _ecore_x_event_reverse_locks(ev->locks);
       xev.keycode = _keycode_get(dsp, ev->keyname);
       xev.same_screen = True;
 
-#if 1                           /* XXX  */
-      if (XFilterEvent((XEvent *)&xev, (Window)NULL) == True) {
+#if 0
+      if (XFilterEvent((XEvent *)&xev, (Window)win) == True) {
          printf("filter event\n");
          return EINA_TRUE;
       }
