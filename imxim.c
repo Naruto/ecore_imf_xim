@@ -42,6 +42,7 @@ struct _Ecore_IMF_Context_Data
     char *locale;
     XIM_Im_Info *im_info;
     int preedit_length;
+    int preedit_cursor;
     Eina_Bool use_preedit;
     Eina_Bool filter_key_release;
     Eina_Bool finalizing;       /* XXX finalize() に該当するものは？ */
@@ -102,6 +103,14 @@ preedit_draw_callback(XIC xic, XPointer client_data,
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
 #endif
+
+   printf("caret:%d chg_first:%d chg_length:%d\n",
+          call_data->caret, call_data->chg_first, call_data->chg_length);
+   XIMText *t = call_data->text;
+   if(t) {
+      printf("XIM_TEXT length:%d encoding:%d\n",
+             t->length, t->encoding_is_wchar);
+   }
 }
 
 static void
@@ -109,11 +118,15 @@ preedit_caret_callback(XIC xic, XPointer client_data,
                        XIMPreeditCaretCallbackStruct *call_data)
 {
    EINA_LOG_DBG("in");
-#if 0
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
-#endif
+
+   if(call_data->direction == XIMAbsolutePosition) {
+      printf("call_data->position:%d\n", call_data->position);
+      imf_context_data->preedit_cursor = call_data->position;
+      ecore_imf_context_preedit_changed_event_add(ctx);
+   }
 }
 
 static XVaNestedList
@@ -136,13 +149,13 @@ preedit_callback_set(Ecore_IMF_Context *ctx)
 
    return XVaCreateNestedList(0,
                               XNPreeditStartCallback,
-                              imf_context_data->preedit_start_cb,
+                              &imf_context_data->preedit_start_cb,
                               XNPreeditDoneCallback,
-                              imf_context_data->preedit_done_cb,
+                              &imf_context_data->preedit_done_cb,
                               XNPreeditDrawCallback,
-                              imf_context_data->preedit_draw_cb,
+                              &imf_context_data->preedit_draw_cb,
                               XNPreeditCaretCallback,
-                              imf_context_data->preedit_caret_cb,
+                              &imf_context_data->preedit_caret_cb,
                               NULL);
 }
 
@@ -157,11 +170,13 @@ get_ic(Ecore_IMF_Context *ctx)
       XIM_Im_Info *im_info = imf_context_data->im_info;
       long mask;
       XVaNestedList preedit_attr = preedit_callback_set(ctx);
+      // XIMStyle im_style = XIMPreeditNothing | XIMStatusNothing;
+      XIMStyle im_style = XIMPreeditCallbacks | XIMStatusNothing;
 
       ic = XCreateIC(im_info->im,
-                     XNInputStyle, XIMPreeditCallbacks | XIMStatusNothing,
+                     XNInputStyle, im_style,
                      XNClientWindow, imf_context_data->win,
-                     XNPreeditAttributes, NULL
+                     XNPreeditAttributes, preedit_attr,
                      XNStatusAttributes, NULL,
                      NULL);
       XFree(preedit_attr);
@@ -240,9 +255,9 @@ setup_im(XIM_Im_Info *info)
          }
 #if 0
      for(i = 0; i < ic_values->count_values; i++)
-         g_print("%s\n", ic_values->supported_values[i]);
-     for(i = 0; i < xim_styles->count_styles; i++)
-         g_print("%#x\n", xim_styles->supported_styles[i]);
+         printf("%s\n", ic_values->supported_values[i]);
+     for(i = 0; i < info->xim_styles->count_styles; i++)
+         printf("%lx\n", info->xim_styles->supported_styles[i]);
 #endif
      XFree(ic_values);
   }
@@ -667,7 +682,6 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
       if(ic) {
          Status mbstatus;
-         EINA_LOG_DBG("ic:%p", ic);
 #ifdef X_HAVE_UTF8_STRING
          val = Xutf8LookupString(ic,
                                  &xev,
