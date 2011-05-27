@@ -639,6 +639,8 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    char *tmp = NULL;
    XKeyPressedEvent xev;
 
+   Eina_Bool result = EINA_FALSE;
+
    imf_context_data = ecore_imf_context_data_get(ctx);
    ic = imf_context_data->ic;
    if(!ic) {
@@ -755,16 +757,22 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
          }
       }
 
-      // EINA_LOG_INFO("compose:%s", compose);
       if(compose) {
          EINA_LOG_INFO("compose:%s", compose);
-         ecore_imf_context_commit_event_add(ctx, compose);
+         Eina_Unicode *unicode;
+         int len;
+         unicode = eina_unicode_utf8_to_unicode(compose, &len);
+         if(!unicode) abort();
+         if(unicode[0] >= 0x20 && unicode[0] != 0x7f) {
+            ecore_imf_context_commit_event_add(ctx, compose);
+            result = EINA_TRUE;
+         }
          free(compose);
-         return EINA_TRUE;
+         free(unicode);
       }
    }
 
-   return EINA_FALSE;
+   return result;
 } /* _ecore_imf_context_xim_filter_event */
 
 static const Ecore_IMF_Context_Info xim_info = {
