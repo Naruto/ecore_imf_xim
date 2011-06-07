@@ -18,6 +18,7 @@
 #include <langinfo.h>
 #include <assert.h>
 
+#define CLAMP(x, low, high) (x > high)? high : (x < low)? low : x
 #define _(x) x
 
 static Eina_List *open_ims = NULL;
@@ -42,7 +43,9 @@ struct _Ecore_IMF_Context_Data
     char *locale;
     XIM_Im_Info *im_info;
     int preedit_length;
+    int preedit_size;
     int preedit_cursor;
+    Eina_Unicode *preedit_chars;
     Eina_Bool use_preedit;
     Eina_Bool filter_key_release;
     Eina_Bool finalizing;       /* XXX finalize() に該当するものは？ */
@@ -93,24 +96,111 @@ preedit_done_callback(XIC xic, XPointer client_data, XPointer call_data)
    ecore_imf_context_preedit_end_event_add(ctx);
 }
 
+
+/* FIXME */
+static int
+xim_text_to_utf8(Ecore_IMF_Context *ctx, XIMText *xim_text, char **text)
+{
+   int text_length = 0;
+   char *result = NULL;
+
+   if(xim_text && xim_text->string.multi_byte) {
+     if(xim_text->encoding_is_wchar) {
+       EINA_LOG_WARN("Wide character return from Xlib not currently supported");
+       *text = NULL;
+       return 0;
+     }
+
+     /* XXX Convert to UTF-8 */
+     result = strdup(xim_text->string.multi_byte);
+     if(result) {
+       text_length = eina_unicode_utf8_get_len(result);
+       if (text_length != xim_text->length) {
+         EINA_LOG_WARN("Size mismatch when converting text from input method: supplied length = %d\n, result length = %d", xim_text->length, text_length);
+       }
+     } else {
+       EINA_LOG_WARN("Error converting text from IM to UCS-4");
+       *text = NULL;
+       return 0;
+     }
+
+     *text = result;
+     return text_length;
+   } else {
+       *text = NULL;
+       return 0;
+   }
+}
+
 static void
 preedit_draw_callback(XIC xic, XPointer client_data, 
                       XIMPreeditDrawCallbackStruct *call_data)
 {
    EINA_LOG_DBG("in");
-#if 0
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
-   Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
-#endif
-
-   printf("caret:%d chg_first:%d chg_length:%d\n",
-          call_data->caret, call_data->chg_first, call_data->chg_length);
+   Ecore_IMF_Context_Data *imf_context_data = ecore_imf_context_data_get(ctx);
    XIMText *t = call_data->text;
-   if(t) {
-      printf("XIM_TEXT length:%d encoding:%d\n",
-             t->length, t->encoding_is_wchar);
+   char *tmp;
+   Eina_Unicode *new_text = NULL;
+   int new_length;
+   int new_text_length;
+   int diff;
+   int chg_first;
+   int chg_length;
+   int i;
+
+   /* XXX */
+   chg_first = CLAMP(call_data->chg_first, 0, imf_context_data->preedit_length);
+   chg_length = CLAMP(call_data->chg_length, 0,
+                      imf_context_data->preedit_length - chg_first);
+
+   new_text_length = xim_text_to_utf8(ctx, t, &tmp);
+   if(tmp) {
+     int tmp_len;
+     new_text = eina_unicode_utf8_to_unicode((const char*)tmp, &tmp_len);
+     free(tmp);
    }
+
+   diff = new_text_length - chg_length;
+   new_length = imf_context_data->preedit_length + diff;
+   if(new_length > imf_context_data->preedit_size) {
+     Eina_Unicode *tmp_chars = NULL;
+     imf_context_data->preedit_size = new_length;
+
+     if(imf_context_data->preedit_chars) {
+        tmp_chars = eina_unicode_strdup(imf_context_data->preedit_chars);
+        free(imf_context_data->preedit_chars);
+        imf_context_data->preedit_chars = calloc(new_length+1,
+                                                 sizeof(Eina_Unicode)); 
+        eina_unicode_strcpy(imf_context_data->preedit_chars, tmp_chars);
+        free(tmp_chars);
+     } else {
+        imf_context_data->preedit_chars = calloc(new_length+1,
+                                                 sizeof(Eina_Unicode)); 
+     }
+     // XXX feedback?
+   }
+
+  if(diff < 0) {
+     for(i=chg_first + chg_length; i<imf_context_data->preedit_length; i++) {
+       imf_context_data->preedit_chars[i+diff] =
+         imf_context_data->preedit_chars[i];
+     }
+   } else {
+     for(i=imf_context_data->preedit_length -1; i>=chg_first+chg_length; i--) {
+       imf_context_data->preedit_chars[i+diff] =
+         imf_context_data->preedit_chars[i];
+     }
+   }
+
+   for(i=0; i<new_text_length; i++) {
+      imf_context_data->preedit_chars[chg_first + i] = new_text[i];
+   } 
+
+   imf_context_data->preedit_length += diff;
+   free(new_text);
+
+   ecore_imf_context_preedit_changed_event_add(ctx);
 }
 
 static void
@@ -441,11 +531,19 @@ _ecore_imf_context_xim_preedit_string_get(Ecore_IMF_Context *ctx,
                                           char **str,
                                           int *cursor_pos)
 {
-#if 0
-   XIM_Context *xim_context;
+   Ecore_IMF_Context_Data *imf_context_data;
+   char *utf8;
+   int len;
+   imf_context_data = ecore_imf_context_data_get(ctx);
+   utf8 = eina_unicode_unicode_to_utf8(imf_context_data->preedit_chars,
+                                       &len);
+   if(str)
+     *str = utf8;
+   else
+     free(utf8);
 
-   xim_context = ecore_imf_context_data_get(ctx);
-#endif
+   if(cursor_pos)
+     *cursor_pos = imf_context_data->preedit_cursor;
 }
 
 static void
@@ -466,9 +564,9 @@ _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx)
 #ifdef X_HAVE_UTF8_STRING
       if ((str = Xutf8ResetIC(ic)))
 #else
-          if ((str = XmbResetIC(ic)))
+      if ((str = XmbResetIC(ic)))
 #endif
-              XFree(str);
+          XFree(str);
 
       XSetICFocus(ic);
    }
