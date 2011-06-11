@@ -61,7 +61,7 @@ struct _Ecore_IMF_Context_Data
 /* prototype */
 Ecore_IMF_Context_Data *imf_context_data_new();
 void             imf_context_data_destroy(Ecore_IMF_Context_Data *imf_context_data);
-static void reinitialize_ic(Ecore_IMF_Context_Data *imf_context_data);
+static void reinitialize_ic(Ecore_IMF_Context *ctx);
 // static void reinitialize_all_ics(XIM_Im_Info *info);
 
 static int
@@ -71,7 +71,7 @@ preedit_start_callback(XIC xic, XPointer client_data, XPointer call_data)
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
 #if 0
    Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
 #endif
 
    /* XXX check finalize */
@@ -86,7 +86,7 @@ preedit_done_callback(XIC xic, XPointer client_data, XPointer call_data)
    EINA_LOG_DBG("in");
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
    Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
 
    if(imf_context_data->preedit_length) {
       imf_context_data->preedit_length = 0;
@@ -210,10 +210,10 @@ preedit_caret_callback(XIC xic, XPointer client_data,
    EINA_LOG_DBG("in");
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
    Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
 
    if(call_data->direction == XIMAbsolutePosition) {
-      printf("call_data->position:%d\n", call_data->position);
+      // printf("call_data->position:%d\n", call_data->position);
       imf_context_data->preedit_cursor = call_data->position;
       ecore_imf_context_preedit_changed_event_add(ctx);
    }
@@ -223,7 +223,7 @@ static XVaNestedList
 preedit_callback_set(Ecore_IMF_Context *ctx)
 {
    Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
 
    imf_context_data->preedit_start_cb.client_data = (XPointer)ctx;
    imf_context_data->preedit_start_cb.callback = (XIMProc)preedit_start_callback;
@@ -254,7 +254,7 @@ get_ic(Ecore_IMF_Context *ctx)
 {
    Ecore_IMF_Context_Data *imf_context_data;
    XIC ic;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
    ic = imf_context_data->ic;
    if(!ic) {
       XIM_Im_Info *im_info = imf_context_data->im_info;
@@ -304,7 +304,7 @@ _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
 {
    EINA_LOG_DBG("in");
    Ecore_IMF_Context_Data *imf_context_data;
-   imf_context_data = (Ecore_IMF_Context_Data *)ecore_imf_context_data_get(ctx);
+   imf_context_data = ecore_imf_context_data_get(ctx);
    imf_context_data_destroy(imf_context_data);
 }
 
@@ -453,19 +453,16 @@ get_im(Ecore_X_Window window, char *locale)
 }
 
 static void
-reinitialize_ic(Ecore_IMF_Context_Data *imf_context_data)
+reinitialize_ic(Ecore_IMF_Context *ctx)
 {
-   XIC ic;
-   ic = imf_context_data->ic;
+   Ecore_IMF_Context_Data *imf_context_data = ecore_imf_context_data_get(ctx);
+   XIC ic = imf_context_data->ic;
    if(ic) {
       XDestroyIC(ic);
       imf_context_data->ic = NULL;
       if(imf_context_data->preedit_length) {
          imf_context_data->preedit_length = 0;
-         if (imf_context_data->finalizing == EINA_FALSE)
-             ;
-             /* XXX */
-             /* ecore_imf_context_preedit_changed_event_add(); */
+         ecore_imf_context_preedit_changed_event_add(ctx); 
       }
    }
 }
@@ -484,14 +481,14 @@ reinitialize_all_ics(XIM_Im_Info *info)
 #endif
 
 static void
-set_ic_client_window(Ecore_IMF_Context_Data *imf_context_data,
-                     Ecore_X_Window window)
+set_ic_client_window(Ecore_IMF_Context *ctx, Ecore_X_Window window)
 {
    EINA_LOG_DBG("in");
+   Ecore_IMF_Context_Data *imf_context_data = ecore_imf_context_data_get(ctx);
    Ecore_X_Window old_win;
 
    /* reinitialize IC */
-   reinitialize_ic(imf_context_data);
+   reinitialize_ic(ctx);
 
    old_win = imf_context_data->win;
    EINA_LOG_DBG("old_win:%d window:%d ", old_win, window);
@@ -519,11 +516,7 @@ _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                          void              *window)
 {
    EINA_LOG_DBG("in");
-   Ecore_IMF_Context_Data *imf_context_data;
-
-   imf_context_data = ecore_imf_context_data_get(ctx);
-   set_ic_client_window(imf_context_data,
-                        (Ecore_X_Window)((Ecore_Window)window));
+   set_ic_client_window(ctx, (Ecore_X_Window)((Ecore_Window)window));
 } /* _ecore_imf_context_xim_client_window_set */
 
 static void
@@ -661,7 +654,7 @@ _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
 
    if(imf_context_data->use_preedit != use_preedit) {
       imf_context_data->use_preedit = use_preedit;
-      reinitialize_ic(imf_context_data);
+      reinitialize_ic(ctx);
    }
 }
 
@@ -709,9 +702,8 @@ _ecore_x_event_reverse_locks(unsigned int state) {
 static KeyCode _keycode_get(Ecore_X_Display *dsp, const char *keyname) {
    KeyCode keycode;
 
-   EINA_LOG_DBG("keyname:%s keysym:%lu", keyname, XStringToKeysym(keyname));
-
-   if(strcmp(keyname, "Keycode-0") == 0) { /* XXX fix */
+   // EINA_LOG_DBG("keyname:%s keysym:%lu", keyname, XStringToKeysym(keyname));
+   if(strcmp(keyname, "Keycode-0") == 0) {
       keycode = 0;
    } else {
       keycode = XKeysymToKeycode(dsp, XStringToKeysym(keyname));
@@ -762,23 +754,11 @@ static Eina_Bool _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
       xev.time = ev->timestamp;
       xev.x = xev.x_root = 0;
       xev.y = xev.y_root = 0;
-#if 1
-      EINA_LOG_INFO("modifiers:%d", ev->modifiers);
-      EINA_LOG_INFO("after modifiers:%d",
-                    _ecore_x_event_reverse_modifiers(ev->modifiers));
-#endif
       xev.state = 0;
       xev.state |= _ecore_x_event_reverse_modifiers(ev->modifiers);
       xev.state |= _ecore_x_event_reverse_locks(ev->locks);
       xev.keycode = _keycode_get(dsp, ev->keyname);
       xev.same_screen = True;
-
-#if 0
-      if (XFilterEvent((XEvent *)&xev, (Window)win) == True) {
-         printf("filter event\n");
-         return EINA_TRUE;
-      }
-#endif
 
       if(ic) {
          Status mbstatus;
