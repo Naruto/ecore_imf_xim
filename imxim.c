@@ -48,7 +48,7 @@ struct _Ecore_IMF_Context_Data
     Eina_Unicode *preedit_chars;
     Eina_Bool use_preedit;
     Eina_Bool filter_key_release;
-    Eina_Bool finalizing;       /* XXX finalize() に該当するものは？ */
+    Eina_Bool finalizing;
     Eina_Bool has_focus;
     Eina_Bool in_toplevel;
 
@@ -69,13 +69,11 @@ preedit_start_callback(XIC xic, XPointer client_data, XPointer call_data)
 {
    EINA_LOG_DBG("in");
    Ecore_IMF_Context *ctx = (Ecore_IMF_Context *)client_data;
-#if 0
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = ecore_imf_context_data_get(ctx);
-#endif
 
-   /* XXX check finalize */
-   ecore_imf_context_preedit_start_event_add(ctx);
+   if(imf_context_data->finalizing == EINA_FALSE) 
+       ecore_imf_context_preedit_start_event_add(ctx);
 
    return -1;
 }
@@ -92,8 +90,9 @@ preedit_done_callback(XIC xic, XPointer client_data, XPointer call_data)
       imf_context_data->preedit_length = 0;
       ecore_imf_context_preedit_changed_event_add(ctx);
    }
-   /* XXX check finalize */
-   ecore_imf_context_preedit_end_event_add(ctx);
+
+   if(imf_context_data->finalizing == EINA_FALSE)
+       ecore_imf_context_preedit_end_event_add(ctx);
 }
 
 
@@ -200,7 +199,8 @@ preedit_draw_callback(XIC xic, XPointer client_data,
    imf_context_data->preedit_length += diff;
    free(new_text);
 
-   ecore_imf_context_preedit_changed_event_add(ctx);
+   if(imf_context_data->finalizing == EINA_FALSE)
+       ecore_imf_context_preedit_changed_event_add(ctx);
 }
 
 static void
@@ -215,7 +215,8 @@ preedit_caret_callback(XIC xic, XPointer client_data,
    if(call_data->direction == XIMAbsolutePosition) {
       // printf("call_data->position:%d\n", call_data->position);
       imf_context_data->preedit_cursor = call_data->position;
-      ecore_imf_context_preedit_changed_event_add(ctx);
+      if(imf_context_data->finalizing == EINA_FALSE)
+          ecore_imf_context_preedit_changed_event_add(ctx);
    }
 }
 
@@ -465,6 +466,7 @@ reinitialize_ic(Ecore_IMF_Context *ctx)
          ecore_imf_context_preedit_changed_event_add(ctx); 
       }
    }
+   imf_context_data->filter_key_release = EINA_FALSE;
 }
 
 #if 0
@@ -495,7 +497,6 @@ set_ic_client_window(Ecore_IMF_Context *ctx, Ecore_X_Window window)
    if(old_win != 0 && old_win != window) { /* XXX how do check window... */
       XIM_Im_Info *info;
       info = imf_context_data->im_info;
-      EINA_LOG_DBG("info:%p", info);
       info->ics = eina_list_remove(info->ics, imf_context_data);
       imf_context_data->im_info = NULL;
    }
@@ -550,9 +551,6 @@ _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx)
    ic = imf_context_data->ic;
    if(ic) {
       char *str;
-#if 0
-      XSetICValues(ic, XNFocusWindow, xevent->xfocus.window, NULL);
-#endif
 
 #ifdef X_HAVE_UTF8_STRING
       if ((str = Xutf8ResetIC(ic)))
@@ -617,7 +615,7 @@ static void _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
    XFree(preedit_attr);
 
    if(result) {
-      /* XXX convert to utf8 */
+      /* FIXME convert to utf8 */
       char *result_utf8 = strdup(result);
       if(result_utf8) {
          ecore_imf_context_commit_event_add(ctx, result_utf8);
@@ -649,7 +647,7 @@ _ecore_imf_context_xim_use_preedit_set(Ecore_IMF_Context *ctx,
 
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = ecore_imf_context_data_get(ctx);
-  
+
    use_preedit = use_preedit != EINA_FALSE;
 
    if(imf_context_data->use_preedit != use_preedit) {
