@@ -67,7 +67,7 @@ void             imf_context_data_destroy(Ecore_IMF_Context_Data *imf_context_da
 
 #ifdef ENABLE_XIM
 static void reinitialize_ic(Ecore_IMF_Context *ctx);
-// static void reinitialize_all_ics(XIM_Im_Info *info);
+static void reinitialize_all_ics(XIM_Im_Info *info);
 
 static int preedit_start_callback(XIC xic, XPointer client_data,
                                   XPointer call_data);
@@ -821,7 +821,6 @@ get_ic(Ecore_IMF_Context *ctx)
    ic = imf_context_data->ic;
    if(!ic) {
       XIM_Im_Info *im_info = imf_context_data->im_info;
-      long mask;
       XVaNestedList preedit_attr = preedit_callback_set(ctx);
       XIMStyle im_style = 0;
 
@@ -972,14 +971,13 @@ setup_im(XIM_Im_Info *info)
                XNQueryICValuesList, &ic_values,
                NULL);
 
-  info->supports_string_conversion = EINA_FALSE;
   if(ic_values) {
      int i;
      
      for(i = 0; i < ic_values->count_values; i++)
          if(strcmp (ic_values->supported_values[i],
                     XNStringConversionCallback) == 0) {
-            info->supports_string_conversion = EINA_TRUE;
+            // info->supports_string_conversion = EINA_TRUE;
             break;
          }
 #if 0
@@ -991,24 +989,6 @@ setup_im(XIM_Im_Info *info)
      XFree(ic_values);
   }
 
-#if 0                           /* legacy code */
-   char *ret;
-   XIMStyles *supported_styles;
-   ret = XGetIMValues(info->im, XNQueryInputStyle, &supported_styles, NULL);
-   if(ret || !supported_styles)
-       goto error;
-
-   int i;
-   XIMStyle chosen_style;
-   for(i = 0; i < supported_styles->count_styles; i++) {
-      if(supported_styles->supported_styles[i] ==
-         (XIMPreeditNothing | XIMStatusNothing))
-          chosen_style = supported_styles->supported_styles[i];
-   }
-   XFree(supported_styles);
-   if(!chosen_style)
-       goto error;
-#endif
 }
 
 static void
