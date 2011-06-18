@@ -68,7 +68,7 @@ void             imf_context_data_destroy(Ecore_IMF_Context_Data *imf_context_da
 #ifdef ENABLE_XIM
 static void reinitialize_ic(Ecore_IMF_Context *ctx);
 static void reinitialize_all_ics(XIM_Im_Info *info);
-
+static void set_ic_client_window(Ecore_IMF_Context *ctx, Ecore_X_Window window);
 static int preedit_start_callback(XIC xic, XPointer client_data,
                                   XPointer call_data);
 static void preedit_done_callback(XIC xic, XPointer client_data,
@@ -117,6 +117,28 @@ _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
 #ifdef ENABLE_XIM
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = ecore_imf_context_data_get(ctx);
+
+   imf_context_data->finalizing = EINA_TRUE;
+   if(imf_context_data->im_info && !imf_context_data->im_info->ics->next) {
+      if(imf_context_data->im_info->reconnecting == EINA_TRUE) {
+         Ecore_X_Display *dsp;
+         dsp = ecore_x_display_get();
+         XUnregisterIMInstantiateCallback (dsp,
+                                           NULL, NULL, NULL,
+                                           xim_instantiate_callback,
+                                           (XPointer)imf_context_data->im_info);
+      } else if(imf_context_data->im_info->im) {
+         XIMCallback im_destroy_callback;
+         im_destroy_callback.client_data = NULL;
+         im_destroy_callback.callback = NULL;
+         XSetIMValues (imf_context_data->im_info->im,
+                       XNDestroyCallback, &im_destroy_callback,
+                       NULL);
+      }
+   }
+
+   set_ic_client_window(ctx, 0);
+
    imf_context_data_destroy(imf_context_data);
 #endif
 }
@@ -153,11 +175,14 @@ set_ic_client_window(Ecore_IMF_Context *ctx, Ecore_X_Window window)
    imf_context_data->win = window;
 
    if(window) {                 /* XXX */
-         XIM_Im_Info *info = NULL;
-         char *locale;
-         locale = imf_context_data->locale;
-         info = get_im(window, locale);
-         imf_context_data->im_info = info;
+      XIM_Im_Info *info = NULL;
+      char *locale;
+      locale = imf_context_data->locale;
+      info = get_im(window, locale);
+      imf_context_data->im_info = info;
+      imf_context_data->im_info->ics = 
+          eina_list_prepend(imf_context_data->im_info->ics,
+                            imf_context_data);
    }
 }
 #endif
