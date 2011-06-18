@@ -34,6 +34,7 @@ struct _XIM_Im_Info
     Eina_List *ics;
     Eina_Bool reconnecting;
     XIMStyles *xim_styles;    
+    // Eina_Bool supports_string_conversion;
 };
 
 typedef struct _Ecore_IMF_Context_Data Ecore_IMF_Context_Data;
@@ -120,20 +121,16 @@ _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
 #endif
 }
 
-#if 0
+#ifdef ENABLE_XIM
 static void
 reinitialize_all_ics(XIM_Im_Info *info)
- {
-#if 0
+{
    Eina_List *tmp_list;
    void *data;
    EINA_LIST_FOREACH(info->ics, tmp_list, data)
-    reinitialize_ic (tmp_list->data);
-#endif
+       reinitialize_ic(data);
 }
-#endif
 
-#ifdef ENABLE_XIM
 static void
 set_ic_client_window(Ecore_IMF_Context *ctx, Ecore_X_Window window)
 {
@@ -826,7 +823,12 @@ get_ic(Ecore_IMF_Context *ctx)
       XIM_Im_Info *im_info = imf_context_data->im_info;
       long mask;
       XVaNestedList preedit_attr = preedit_callback_set(ctx);
-      XIMStyle im_style = XIMPreeditCallbacks | XIMStatusNothing;
+      XIMStyle im_style = 0;
+
+      if(imf_context_data->use_preedit)
+          im_style |= XIMPreeditCallbacks;
+      else
+          im_style |= XIMPreeditNothing;
 
       ic = XCreateIC(im_info->im,
                      XNInputStyle, im_style,
@@ -835,12 +837,20 @@ get_ic(Ecore_IMF_Context *ctx)
                      XNStatusAttributes, NULL,
                      NULL);
       XFree(preedit_attr);
-      if(!ic) return NULL;
 
-      XGetICValues(ic, XNFilterEvents, &mask, NULL);
-      ecore_x_event_mask_set(imf_context_data->win, mask);
-      imf_context_data->mask = mask;
+      if(ic) {
+         unsigned long mask = 0xaaaaaaaa;
+         XGetICValues (ic,
+                       XNFilterEvents, &mask,
+                       NULL);
+         //imf_context_data->filter_key_release = (mask & KeyReleaseMask) != 0;
+         imf_context_data->mask = mask;
+         ecore_x_event_mask_set(imf_context_data->win, mask);
+      }
+
       imf_context_data->ic = ic;
+      if(ic && imf_context_data->has_focus == EINA_TRUE)
+          XSetICFocus(ic);
    }
 
    return ic;
@@ -962,13 +972,14 @@ setup_im(XIM_Im_Info *info)
                XNQueryICValuesList, &ic_values,
                NULL);
 
+  info->supports_string_conversion = EINA_FALSE;
   if(ic_values) {
      int i;
      
      for(i = 0; i < ic_values->count_values; i++)
          if(strcmp (ic_values->supported_values[i],
                     XNStringConversionCallback) == 0) {
-            // info->supports_string_conversion = TRUE;
+            info->supports_string_conversion = EINA_TRUE;
             break;
          }
 #if 0
@@ -1003,6 +1014,12 @@ setup_im(XIM_Im_Info *info)
 static void
 xim_destroy_callback(XIM xim, XPointer client_data, XPointer call_data)
 {
+   XIM_Im_Info *info = (XIM_Im_Info *)client_data;
+   info->im = NULL;
+
+   reinitialize_all_ics(info);
+   xim_info_try_im(info);
+
    return;
 } 
 #endif  /* ENABLE_XIM */
