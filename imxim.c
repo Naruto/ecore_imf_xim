@@ -868,13 +868,13 @@ get_ic(Ecore_IMF_Context *ctx)
       } else {
           im_style |= XIMPreeditNothing;
       }
+      im_style |= XIMStatusNothing;
 
       ic = XCreateIC(im_info->im,
                      XNInputStyle, im_style,
                      XNClientWindow, imf_context_data->win,
                      name, preedit_attr, NULL);
       XFree(preedit_attr);
-      printf("ic:%p win:%d\n", ic, (int)imf_context_data->win);
       if(ic) {
          unsigned long mask = 0xaaaaaaaa;
          XGetICValues (ic,
