@@ -237,6 +237,7 @@ _ecore_imf_context_xim_focus_in(Ecore_IMF_Context *ctx)
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = ecore_imf_context_data_get(ctx);
    ic = imf_context_data->ic;
+   imf_context_data->has_focus = EINA_TRUE;
    if(ic) {
       char *str;
 
@@ -258,9 +259,12 @@ static void _ecore_imf_context_xim_focus_out(Ecore_IMF_Context *ctx) {
    XIC ic;
    Ecore_IMF_Context_Data *imf_context_data;
    imf_context_data = ecore_imf_context_data_get(ctx);
-   ic = imf_context_data->ic;
-   if(ic)
-       XUnsetICFocus(ic);
+   if(imf_context_data->has_focus == EINA_TRUE) {
+      imf_context_data->has_focus = EINA_FALSE;
+      ic = imf_context_data->ic;
+      if(ic)
+          XUnsetICFocus(ic);
+   }
 #endif
 } /* _ecore_imf_context_xim_focus_out */
 
