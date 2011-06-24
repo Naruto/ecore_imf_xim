@@ -83,6 +83,8 @@ static XVaNestedList preedit_callback_set(Ecore_IMF_Context *ctx);
 static XIC get_ic(Ecore_IMF_Context *ctx);
 static XIM_Im_Info* get_im(Ecore_X_Window window, char *locale);
 static void xim_info_try_im(XIM_Im_Info *info);
+static void xim_info_display_closed(Ecore_X_Display *display,
+                                    int is_error, XIM_Im_Info *info);
 static void xim_instantiate_callback(Display *display, XPointer client_data,
                                      XPointer call_data);
 static void setup_im(XIM_Im_Info *info);
@@ -148,9 +150,10 @@ static void
 reinitialize_all_ics(XIM_Im_Info *info)
 {
    Eina_List *tmp_list;
-   void *data;
-   EINA_LIST_FOREACH(info->ics, tmp_list, data)
-       reinitialize_ic(data);
+   Ecore_IMF_Context *ctx;
+
+   EINA_LIST_FOREACH(info->ics, tmp_list, ctx)
+       reinitialize_ic(ctx);
 }
 
 static void
@@ -606,6 +609,14 @@ Eina_Bool ecore_imf_xim_init(void) {
 } /* ecore_imf_xim_init */
 
 void ecore_imf_xim_shutdown(void) {
+
+   while (open_ims) {
+      XIM_Im_Info *info = open_ims->data;
+      Ecore_X_Display *display = ecore_x_display_get();
+
+      xim_info_display_closed(display, EINA_FALSE, info);
+   }
+
    ecore_x_shutdown();
    eina_shutdown();
 } /* ecore_imf_xim_shutdown */
@@ -846,22 +857,24 @@ get_ic(Ecore_IMF_Context *ctx)
    ic = imf_context_data->ic;
    if(!ic) {
       XIM_Im_Info *im_info = imf_context_data->im_info;
-      XVaNestedList preedit_attr = preedit_callback_set(ctx);
+      XVaNestedList preedit_attr = NULL;
       XIMStyle im_style = 0;
+      char *name = NULL;
 
-      if(imf_context_data->use_preedit)
+      if(imf_context_data->use_preedit == EINA_TRUE) {
           im_style |= XIMPreeditCallbacks;
-      else
+          preedit_attr = preedit_callback_set(ctx);
+          name = XNPreeditAttributes;
+      } else {
           im_style |= XIMPreeditNothing;
+      }
 
       ic = XCreateIC(im_info->im,
                      XNInputStyle, im_style,
                      XNClientWindow, imf_context_data->win,
-                     XNPreeditAttributes, preedit_attr,
-                     XNStatusAttributes, NULL,
-                     NULL);
+                     name, preedit_attr, NULL);
       XFree(preedit_attr);
-
+      printf("ic:%p win:%d\n", ic, (int)imf_context_data->win);
       if(ic) {
          unsigned long mask = 0xaaaaaaaa;
          XGetICValues (ic,
@@ -953,6 +966,36 @@ xim_info_try_im(XIM_Im_Info *info)
       }
       setup_im(info);
    } 
+}
+
+static void
+xim_info_display_closed(Ecore_X_Display *display,
+                        int is_error,
+                        XIM_Im_Info *info)
+{
+   Eina_List *ics, *tmp_list;
+   Ecore_IMF_Context *ctx;
+
+   open_ims = eina_list_remove(open_ims, info);
+
+   ics = info->ics;
+   info->ics = NULL;
+
+   EINA_LIST_FOREACH(ics, tmp_list, ctx)
+       set_ic_client_window(ctx, 0);
+
+   EINA_LIST_FREE(ics, ctx) {
+      Ecore_IMF_Context_Data *imf_context_data; 
+      imf_context_data = ecore_imf_context_data_get(ctx);
+      imf_context_data_destroy(imf_context_data);
+   }
+
+   free (info->locale);
+
+   if (info->im)
+       XCloseIM (info->im);
+
+   free (info);
 }
 
 static void
