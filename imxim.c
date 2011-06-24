@@ -50,7 +50,6 @@ struct _Ecore_IMF_Context_Data
     int preedit_cursor;
     Eina_Unicode *preedit_chars;
     Eina_Bool use_preedit;
-    Eina_Bool filter_key_release;
     Eina_Bool finalizing;
     Eina_Bool has_focus;
     Eina_Bool in_toplevel;
@@ -103,7 +102,6 @@ _ecore_imf_context_xim_add(Ecore_IMF_Context *ctx)
    if(!imf_context_data) return;
 
    imf_context_data->use_preedit = EINA_TRUE;
-   imf_context_data->filter_key_release = EINA_FALSE;
    imf_context_data->finalizing = EINA_FALSE;
    imf_context_data->has_focus = EINA_FALSE;
    imf_context_data->in_toplevel = EINA_FALSE;
@@ -884,7 +882,6 @@ get_ic(Ecore_IMF_Context *ctx)
          XGetICValues (ic,
                        XNFilterEvents, &mask,
                        NULL);
-         //imf_context_data->filter_key_release = (mask & KeyReleaseMask) != 0;
          imf_context_data->mask = mask;
          ecore_x_event_mask_set(imf_context_data->win, mask);
       }
@@ -910,7 +907,6 @@ reinitialize_ic(Ecore_IMF_Context *ctx)
          ecore_imf_context_preedit_changed_event_add(ctx); 
       }
    }
-   imf_context_data->filter_key_release = EINA_FALSE;
 }
 
 static XIM_Im_Info*
