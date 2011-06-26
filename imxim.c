@@ -157,53 +157,6 @@ _ecore_imf_context_xim_del(Ecore_IMF_Context *ctx)
 #endif
 }
 
-#ifdef ENABLE_XIM
-static void
-reinitialize_all_ics(XIM_Im_Info *info)
-{
-   Eina_List *tmp_list;
-   Ecore_IMF_Context *ctx;
-
-   EINA_LIST_FOREACH(info->ics, tmp_list, ctx)
-     reinitialize_ic(ctx);
-}
-
-static void
-set_ic_client_window(Ecore_IMF_Context *ctx,
-                     Ecore_X_Window     window)
-{
-   EINA_LOG_DBG("in");
-   Ecore_IMF_Context_Data *imf_context_data = ecore_imf_context_data_get(ctx);
-   Ecore_X_Window old_win;
-
-   /* reinitialize IC */
-   reinitialize_ic(ctx);
-
-   old_win = imf_context_data->win;
-   EINA_LOG_DBG("old_win:%d window:%d ", old_win, window);
-   if(old_win != 0 && old_win != window)   /* XXX how do check window... */
-     {
-        XIM_Im_Info *info;
-        info = imf_context_data->im_info;
-        info->ics = eina_list_remove(info->ics, imf_context_data);
-        imf_context_data->im_info = NULL;
-     }
-
-   imf_context_data->win = window;
-
-   if(window) /* XXX */
-     {
-        XIM_Im_Info *info = NULL;
-        info = get_im(window, imf_context_data->locale);
-        imf_context_data->im_info = info;
-        imf_context_data->im_info->ics =
-          eina_list_prepend(imf_context_data->im_info->ics,
-                            imf_context_data);
-     }
-}
-
-#endif
-
 static void
 _ecore_imf_context_xim_client_window_set(Ecore_IMF_Context *ctx,
                                          void              *window)
@@ -330,7 +283,6 @@ _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
 
    if(result)
      {
-        /* FIXME convert to utf8 */
          char *result_utf8 = strdup(result);
          if(result_utf8)
            {
@@ -347,14 +299,6 @@ _ecore_imf_context_xim_reset(Ecore_IMF_Context *ctx) {
 
    XFree (result);
 #endif
-}
-
-static void
-_ecore_imf_context_xim_cursor_position_set(Ecore_IMF_Context *ctx,
-                                           int                cursor_pos)
-{
-   EINA_LOG_DBG("in");
-   return;
 }
 
 static void
@@ -454,8 +398,6 @@ _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
    KeySym sym;
    char *compose = NULL;
    char *tmp = NULL;
-   XKeyPressedEvent xev;
-
    Eina_Bool result = EINA_FALSE;
 
    imf_context_data = ecore_imf_context_data_get(ctx);
@@ -467,6 +409,7 @@ _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
    if(type == ECORE_IMF_EVENT_KEY_DOWN)
      {
+        XKeyPressedEvent xev;
         Ecore_IMF_Event_Key_Down *ev = (Ecore_IMF_Event_Key_Down *)event;
         EINA_LOG_DBG("ECORE_IMF_EVENT_KEY_DOWN");
 
@@ -475,7 +418,7 @@ _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
         xev.type = KeyPress;
         xev.serial = 0; /* hope it doesn't matter */
-        xev.send_event = 0; /* XXX change send_event value */
+        xev.send_event = 0;
         xev.display = dsp;
         xev.window = win;
         xev.root = ecore_x_window_root_get(win);
@@ -573,7 +516,6 @@ _ecore_imf_context_xim_filter_event(Ecore_IMF_Context   *ctx,
 
         if(compose)
           {
-             EINA_LOG_INFO("compose:%s", compose);
              Eina_Unicode *unicode;
              int len;
              unicode = eina_unicode_utf8_to_unicode(compose, &len);
@@ -613,7 +555,7 @@ static Ecore_IMF_Context_Class xim_class = {
    .focus_in = _ecore_imf_context_xim_focus_in,
    .focus_out = _ecore_imf_context_xim_focus_out,
    .reset = _ecore_imf_context_xim_reset,
-   .cursor_position_set = _ecore_imf_context_xim_cursor_position_set,
+   .cursor_position_set = NULL,
    .use_preedit_set = _ecore_imf_context_xim_use_preedit_set,
    .input_mode_set = NULL,
    .filter_event = _ecore_imf_context_xim_filter_event,
@@ -635,12 +577,12 @@ xim_imf_module_create(void) {
 error:
    free(ctx);
    return NULL;
-} /* xim_imf_module_create */
+}
 
 Ecore_IMF_Context *
 xim_imf_module_exit(void) {
    return NULL;
-} /* xim_imf_module_exit */
+}
 
 Eina_Bool
 ecore_imf_xim_init(void) {
@@ -652,7 +594,7 @@ ecore_imf_xim_init(void) {
                              xim_imf_module_exit);
 
    return EINA_TRUE;
-} /* ecore_imf_xim_init */
+}
 
 void
 ecore_imf_xim_shutdown(void) {
@@ -665,7 +607,7 @@ ecore_imf_xim_shutdown(void) {
 
    ecore_x_shutdown();
    eina_shutdown();
-} /* ecore_imf_xim_shutdown */
+}
 
 EINA_MODULE_INIT(ecore_imf_xim_init);
 EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
@@ -978,6 +920,50 @@ reinitialize_ic(Ecore_IMF_Context *ctx)
              imf_context_data->preedit_length = 0;
              ecore_imf_context_preedit_changed_event_add(ctx);
           }
+     }
+}
+
+static void
+reinitialize_all_ics(XIM_Im_Info *info)
+{
+   Eina_List *tmp_list;
+   Ecore_IMF_Context *ctx;
+
+   EINA_LIST_FOREACH(info->ics, tmp_list, ctx)
+     reinitialize_ic(ctx);
+}
+
+static void
+set_ic_client_window(Ecore_IMF_Context *ctx,
+                     Ecore_X_Window     window)
+{
+   EINA_LOG_DBG("in");
+   Ecore_IMF_Context_Data *imf_context_data = ecore_imf_context_data_get(ctx);
+   Ecore_X_Window old_win;
+
+   /* reinitialize IC */
+   reinitialize_ic(ctx);
+
+   old_win = imf_context_data->win;
+   EINA_LOG_DBG("old_win:%d window:%d ", old_win, window);
+   if(old_win != 0 && old_win != window)   /* XXX how do check window... */
+     {
+        XIM_Im_Info *info;
+        info = imf_context_data->im_info;
+        info->ics = eina_list_remove(info->ics, imf_context_data);
+        imf_context_data->im_info = NULL;
+     }
+
+   imf_context_data->win = window;
+
+   if(window) /* XXX */
+     {
+        XIM_Im_Info *info = NULL;
+        info = get_im(window, imf_context_data->locale);
+        imf_context_data->im_info = info;
+        imf_context_data->im_info->ics =
+          eina_list_prepend(imf_context_data->im_info->ics,
+                            imf_context_data);
      }
 }
 
