@@ -1,0 +1,2 @@
+% cd ${efl_repository}/e
+% patch -p1 < ${ecore_imf_xim}/ecore_imf_xim.diff
