@@ -1,5 +1,5 @@
 diff --git a/trunk/ecore/configure.ac b/trunk/ecore/configure.ac
-index 853bdad..32fcb80 100644
+index 4e91048..e1b37ba 100644
 --- a/trunk/ecore/configure.ac
 +++ b/trunk/ecore/configure.ac
 @@ -161,6 +161,9 @@ want_ecore_evas_directfb="no"
@@ -28,7 +28,7 @@ index 853bdad..32fcb80 100644
  
  ### Additional options to configure
  
-@@ -1165,6 +1170,20 @@ ECORE_CHECK_MODULE([input], [${want_ecore_input}], [Input])
+@@ -1168,6 +1173,20 @@ ECORE_CHECK_MODULE([input], [${want_ecore_input}], [Input])
  ECORE_CHECK_MODULE([input-evas], [${want_ecore_input}], [Input_Evas], [${have_evas}],
     [requirements_ecore_input_evas="ecore-input >= 1.0.0 evas >= 1.0.0 ${requirements_ecore_input}"])
  
@@ -49,7 +49,7 @@ index 853bdad..32fcb80 100644
  ## Graphic systems
  
  # ecore_x{cb}
-@@ -1402,6 +1421,7 @@ AC_SUBST(requirements_ecore_sdl)
+@@ -1405,6 +1424,7 @@ AC_SUBST(requirements_ecore_sdl)
  AC_SUBST(requirements_ecore_x)
  AC_SUBST(requirements_ecore_win32)
  AC_SUBST(requirements_ecore_wince)
@@ -57,7 +57,7 @@ index 853bdad..32fcb80 100644
  
  AC_CONFIG_FILES([
  Makefile
-@@ -1449,6 +1469,9 @@ src/lib/ecore_x/xlib/Makefile
+@@ -1452,6 +1472,9 @@ src/lib/ecore_x/xlib/Makefile
  src/lib/ecore_x/xcb/Makefile
  src/examples/Makefile
  src/tests/Makefile
@@ -67,7 +67,7 @@ index 853bdad..32fcb80 100644
  README
  ecore.spec
  $po_makefile_in
-@@ -1502,6 +1525,7 @@ if test "x$have_ecore_file" = "xyes" ; then
+@@ -1505,6 +1528,7 @@ if test "x$have_ecore_file" = "xyes" ; then
  fi
  #echo "  Ecore_Config.................: $have_ecore_config (deprecated)"
  echo "  Ecore_IMF....................: $have_ecore_imf"
@@ -330,10 +330,10 @@ index 0000000..6978672
 +endif
 diff --git a/trunk/ecore/src/modules/immodules/xim/Makefile.am b/trunk/ecore/src/modules/immodules/xim/Makefile.am
 new file mode 100644
-index 0000000..006035c
+index 0000000..cc0682d
 --- /dev/null
 +++ b/trunk/ecore/src/modules/immodules/xim/Makefile.am
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,27 @@
 +MAINTAINERCLEANFILES = Makefile.in
 +
 +AM_CPPFLAGS = \
@@ -348,6 +348,7 @@ index 0000000..006035c
 +-I$(top_builddir)/src/lib/ecore_imf \
 +-DPACKAGE_LIB_DIR=\"$(libdir)\" \
 +-DPACKAGE_DATA_DIR=\"$(datadir)/$(PACKAGE)\" \
++@EVAS_CFLAGS@ \
 +@EINA_CFLAGS@
 +
 +pkgdir = $(libdir)/ecore/immodules
@@ -362,10 +363,10 @@ index 0000000..006035c
 +
 diff --git a/trunk/ecore/src/modules/immodules/xim/ecore_imf_xim.c b/trunk/ecore/src/modules/immodules/xim/ecore_imf_xim.c
 new file mode 100644
-index 0000000..7f4ae33
+index 0000000..5b3b060
 --- /dev/null
 +++ b/trunk/ecore/src/modules/immodules/xim/ecore_imf_xim.c
-@@ -0,0 +1,1142 @@
+@@ -0,0 +1,1150 @@
 +#include <Eina.h>
 +#include <Ecore.h>
 +#include <Ecore_Input.h>
@@ -926,8 +927,16 @@ index 0000000..7f4ae33
 +   .use_preedit_set = _ecore_imf_context_xim_use_preedit_set,
 +   .input_mode_set = NULL,
 +   .filter_event = _ecore_imf_context_xim_filter_event,
++   .preedit_string_with_attributes_get = NULL,
 +   .prediction_allow_set = NULL,
 +   .autocapital_type_set = NULL,
++   .control_panel_show = NULL,
++   .control_panel_hide = NULL,
++   .input_panel_layout_set = NULL,
++   .input_panel_layout_get = NULL,
++   .input_panel_language_set = NULL,
++   .input_panel_language_get = NULL,
++   .cursor_location_set = NULL,
 +};
 +
 +static Ecore_IMF_Context *
@@ -979,8 +988,9 @@ index 0000000..7f4ae33
 +EINA_MODULE_INIT(ecore_imf_xim_init);
 +EINA_MODULE_SHUTDOWN(ecore_imf_xim_shutdown);
 +
++#ifdef ENABLE_XIM
 +/*
-+ * iternal function
++ * internal functions
 + */
 +Ecore_IMF_Context_Data *
 +imf_context_data_new()
@@ -1003,7 +1013,7 @@ index 0000000..7f4ae33
 +error:
 +   imf_context_data_destroy(imf_context_data);
 +   return NULL;
-+} /* imf_context_data_new */
++}
 +
 +void
 +imf_context_data_destroy(Ecore_IMF_Context_Data *imf_context_data) {
@@ -1015,9 +1025,8 @@ index 0000000..7f4ae33
 +
 +   free(imf_context_data->locale);
 +   free(imf_context_data);
-+} /* imf_context_data_destroy */
++}
 +
-+#ifdef ENABLE_XIM
 +static int
 +preedit_start_callback(XIC      xic,
 +                       XPointer client_data,
